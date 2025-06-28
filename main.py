@@ -1,6 +1,7 @@
 import sys
 from PyQt5.QtWidgets import QApplication
 from kiwoom_api import KiwoomAPI
+from strategy import simple_ma_strategy
 
 def main():
     print("자동매매 프로그램 시작")
@@ -17,6 +18,14 @@ def main():
         print("최신 5일치 데이터:")
         for i, day_data in enumerate(samsung_data[:5]):
             print(f" 날짜: {day_data['date']}, 종가: {day_data['close']:,}원, 거래량: {day_data['volume']:,}")
+
+        signal = simple_ma_strategy(samsung_data)
+
+        print(f"\n[최종 판단] 매매 전략 신호: {signal}")
+        if signal == 'BUY':
+            print("매수 준비합니다.")
+        else:
+            print("매수 조건이 총족되지 않았습니다.")
     else:
         print("데이터를 가져오는 데 실패했습니다.")
     print("\n모든 테스트가 완료되었습니다.")

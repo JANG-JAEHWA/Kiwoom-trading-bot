@@ -40,7 +40,7 @@ class KiwoomAPI:
 
         self.login_event_loop.exit()
 
-    def get_daily_data(self, code, data_str="20250625"):
+    def get_daily_data(self, code, data_str="20250627"):
         """
         지정한 종목의 일봉 데이터를 요청합니다.
         TR 코드: opt10081
