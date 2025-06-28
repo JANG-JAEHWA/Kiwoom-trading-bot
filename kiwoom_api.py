@@ -16,6 +16,7 @@ class KiwoomAPI:
         """이벤트와 이벤트 핸들러를 연결합니다."""
         self.api.OnEventConnect.connect(self._event_connect)
         self.api.OnReceiveTrData.connect(self._recieve_tr_data)
+        self.api.OnReceiveChejanData.connect(self._receive_chejan_data)
 
     def login(self):
         """
@@ -77,4 +78,38 @@ class KiwoomAPI:
                 data_list.append(data)
             self.tr_data = data_list
         self.tr_event_loop.exit()
-                    
+
+    def send_order(self, rqname, screen_no, acc_no, order_type, code, qty, price, hoga_gb, org_order_no):
+        """
+        주식 주문을 서버로 전송하는 함수
+        
+        rqname: 사용자가 구분할 요청 이름
+        screen_no: 화면번호 (보통 4자리 숫자, 0101 등)
+        acc_no: 계좌번호 10자리
+        order_type: 주문유형 (1:신규매수, 2:신규매도, 3:매수취소, 4:매도취소...)
+        code: 종목코드 (예: "005930")
+        qty: 주문수량
+        price: 주문가격 (시장가 주문 시 0)
+        hoga_gb: 거래구분(가격 유형) ("00":지정가, "03":시장가)
+        org_order_no: 원주문번호 (정정/취소 주문 시 사용, 신규 주문은 "")
+        """
+        print("\n주문 전송을 시도합니다...")
+        self.api.SendOrder(
+            rqname, screen_no, acc_no, order_type, code, qty, price, hoga_gb, org_order_no
+        )
+
+    def _receive_chejan_data(self, gubun, item_cnt, fid_list):
+        """
+        gubun 0: 주문 접수/채결, 1: 국내주식 잔고
+        """
+        if gubun == "0":
+            order_status = self.api.GetChejanData("913") # 주문상태
+            stock_code = self.api.GetChejanData("9001")[1:] # 종목코드
+            order_qty = int(self.api.GetChejanData("900")) # 주문수량
+            excuted_price = int(self.api.GetChejanData("910")) # 체결가
+            excuted_qty = int(self.api.GetChejanData("911")) # 체결수량
+            print(f"[주문/채결] 상태: {order_status}, 종목: {stock_code}, 주문수량: {order_qty}, 체결가: {excuted_price}, 체결수량: {excuted_qty}")
+        elif gubun == "1":
+            print("잔고 변경 데이터 수신")
+                  
+        
