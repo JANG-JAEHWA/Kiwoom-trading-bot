@@ -23,7 +23,18 @@ def main():
 
         print(f"\n[최종 판단] 매매 전략 신호: {signal}")
         if signal == 'BUY':
-            print("매수 준비합니다.")
+            print("시장가 매수 실행.")
+            kiwoom.send_order(
+                rqname="삼성전자_매수",
+                screen_no="0102",
+                acc_no=kiwoom.account_number,
+                order_type=1,
+                code="005930",
+                qty=1,
+                price=0,
+                hoga_gb="03",
+                order_order_no=""
+            )
         else:
             print("매수 조건이 총족되지 않았습니다.")
     else:
