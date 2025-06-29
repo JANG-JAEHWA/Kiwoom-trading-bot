@@ -13,3 +13,9 @@ __pycache__/
 
 logs/
 *.log
+
+*.pkl
+*.joblib
+*.h5
+*.keras
+.ipynb_checkpoints/
