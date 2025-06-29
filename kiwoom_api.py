@@ -1,3 +1,5 @@
+import time
+from PyQt5.QtCore import QEventLoop
 import sys
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QAxContainer import QAxWidget
@@ -41,22 +43,44 @@ class KiwoomAPI:
 
         self.login_event_loop.exit()
 
-    def get_daily_data(self, code, data_str="20250627"):
+    def get_daily_data(self, code, start_date="20250627", continuous=False):
         """
         지정한 종목의 일봉 데이터를 요청합니다.
         TR 코드: opt10081
         """
         print(f"[{code}] 일봉 데이터 요청 중...")
+
+        all_data = []
         
         self.api.SetInputValue("종목코드", code)
-        self.api.SetInputValue("기준일자", data_str)
+        self.api.SetInputValue("기준일자", start_date)
         self.api.SetInputValue("수정주가구분", "1")#1: 수정주가, 0: 원주가
 
         self.api.CommRqData("일봉데이터요청", "opt10081", 0, "0101")
-
         self.tr_event_loop.exec_()
 
-        return self.tr_data
+        if self.tr_data:
+            all_data.extend(self.tr_data)
+
+        if continuous:
+            while self.api.dynamicCall("GetGlobalVariable(QString)", "prev_next") == "2":
+                print("연속 조회 진행 중...")
+                time.sleep(0.2)
+
+                self.api.SetInputValue("종목코드", code)
+                self.api.SetInputValue("기준일자", start_date)
+                self.api.SetInputValue("수정주가구분", "1")
+
+                self.api.CommRqData("일봉데이터요청", "opt10081", 2, "0101")
+                self.tr_event_loop.exec_()
+
+                if self.tr_data:
+                    all_data.extend(self.tr_data)
+                else:
+                    break
+                      
+        print(f"총 {len(all_data)}일치 데이터 수신 완료.")
+        return all_data
 
     def _recieve_tr_data(self, screen_no, rqname, trcode, record_name, prev_next, *args):
         """
