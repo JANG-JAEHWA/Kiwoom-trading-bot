@@ -1,42 +1,32 @@
+import os
+import pandas as pd
 import sys
 from PyQt5.QtWidgets import QApplication
 from kiwoom_api import KiwoomAPI
 from strategy import simple_ma_strategy
 
 def main():
-    print("자동매매 프로그램 시작")
+    print("AI 트레이딩 시스템 - 데이터 수집기 시작")
     
     
     kiwoom = KiwoomAPI()
     kiwoom.login()
     print(f"로그인 후 확인된 계좌번호: {kiwoom.account_number}")
+
+    if not os.path.exists("data"):
+        os.makedirs("data")
+        print("'data'폴더를 생성했습니다.")
     
-    samsung_data = kiwoom.get_daily_data("005930")
+    samsung_data = kiwoom.get_daily_data("005930", continuous=True)
 
     if samsung_data:
-        print(f"총 {len(samsung_data)}일치의 데이터를 수신했습니다.")
-        print("최신 5일치 데이터:")
-        for i, day_data in enumerate(samsung_data[:5]):
-            print(f" 날짜: {day_data['date']}, 종가: {day_data['close']:,}원, 거래량: {day_data['volume']:,}")
+        df = pd.DataFrame(samsung_data)
+        df = df.sort_values(by='date', ascending=True)
 
-        signal = simple_ma_strategy(samsung_data)
+        file_path = os.path.join("data", "005930_daily_data.csv")
 
-        print(f"\n[최종 판단] 매매 전략 신호: {signal}")
-        if signal == 'BUY':
-            print("시장가 매수 실행.")
-            kiwoom.send_order(
-                rqname="삼성전자_매수",
-                screen_no="0102",
-                acc_no=kiwoom.account_number,
-                order_type=1,
-                code="005930",
-                qty=1,
-                price=0,
-                hoga_gb="03",
-                order_order_no=""
-            )
-        else:
-            print("매수 조건이 총족되지 않았습니다.")
+        df.to_csv(file_path, index=False, encoding='utf-8-sig')
+        print(f"데이터를 성공적으로 저장했습니다: {file_path}")
     else:
         print("데이터를 가져오는 데 실패했습니다.")
     print("\n모든 테스트가 완료되었습니다.")
