@@ -3,9 +3,14 @@ import pandas as pd
 def simple_ma_strategy(daily_data):
     """
     5일 이평선이 20일 이평선을 돌파시 매수 전략
+    20일 이평선이 5일 이평선을 돌파시 매도 전략
     """
-    if not daily_data or len(daily_data) < 20:
-        print("[전략 분석 실패] 데이터가 20일치 미만입니다.")
+    if not isinstance(daily_data, pd.DataFrame):
+        df = pd.DataFrame(daily_data)
+    else:
+        df = daily_data
+        
+    if len(df) < 20:
         return "HOLD"
 
     df = pd.DataFrame(daily_data)
@@ -19,11 +24,11 @@ def simple_ma_strategy(daily_data):
     prev_ma20 = df['MA20'].iloc[-2]
     latest_ma20 = df['MA20'].iloc[-1]
 
-    print(f"\n[전략분석] 최신 MA5: {latest_ma5:.0f}, 최신 MA20: {latest_ma20:.0f}")
-
-    if prev_ma5 <= prev_ma20 and latest_ma > latest_ma20:
+    if prev_ma5 <= prev_ma20 and latest_ma5 > latest_ma20:
         print(">>> 골든크로스 발생! 매수 신호! <<<")
         return "BUY"
+    if prev_ma5 >= prev_ma20 and latest_ma5 < latest_ma20:
+        print(">>> 데드크로스 발생! 매도 신호! <<<")
+        return "sell"
 
-    print("매수 신호 없음. 관망합니다.")
     return "HOLD"
