@@ -8,13 +8,11 @@ def simple_ma_strategy(daily_data):
     if not isinstance(daily_data, pd.DataFrame):
         df = pd.DataFrame(daily_data)
     else:
-        df = daily_data
+        df = daily_data.copy()
         
     if len(df) < 20:
         return "HOLD"
 
-    df = pd.DataFrame(daily_data)
-    df = df.iloc[::-1].reset_index(drop=True) #데이터 순서 뒤집음
 
     df['MA5'] = df['close'].rolling(window=5).mean()
     df['MA20'] = df['close'].rolling(window=20).mean()
@@ -29,6 +27,6 @@ def simple_ma_strategy(daily_data):
         return "BUY"
     if prev_ma5 >= prev_ma20 and latest_ma5 < latest_ma20:
         print(">>> 데드크로스 발생! 매도 신호! <<<")
-        return "sell"
+        return "SELL"
 
     return "HOLD"
