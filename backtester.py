@@ -1,5 +1,6 @@
 import pandas as pd
-from strategy import simple_ma_strategy
+from strategy import ai_strategy
+import os
 
 def run_backtest(data_path, initial_capital=10000000, fee_tax_rate=0.002):
     try:
@@ -22,7 +23,7 @@ def run_backtest(data_path, initial_capital=10000000, fee_tax_rate=0.002):
         current_date = current_data_slice.index[-1]
         current_price = current_data_slice['close'].iloc[-1]
 
-        signal = simple_ma_strategy(current_data_slice)
+        signal = ai_strategy(current_data_slice)
 
         if signal == "BUY" and cash > trade_amount:
             if shares == 0:

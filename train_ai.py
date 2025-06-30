@@ -2,6 +2,7 @@ import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 import os
+import joblib
 
 def train_ai_model(data_path):
     """
@@ -50,6 +51,12 @@ def main():
     if model is None:
         print("모델 훈련 실패 프로그램 종료")
         return
+    if not os.path.exists('models'):
+        os.makedirs('models')
+
+    model_path = os.path.join('models', 'ai_model_v1.joblib')
+    joblib.dump(model, model_path)
+    print(f"\n훈련된 AI 모델을 '{model_path}' 경로에 저장했습니다.")
 
     latest_features = full_data[['MA5', 'MA20', 'price_change_ratio', 'volume']].iloc[[-1]]
 
