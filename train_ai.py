@@ -8,7 +8,7 @@ def train_ai_model(data_path):
     """
     상승/하락 예측 AI모델
     """
-    print("\n--- AI 모델 훈련 시작 ---")
+    print("\n--- AI 모델 훈련 시작 (v2: 추가 힌트 적용)---")
 
     try:
         df = pd.read_csv(data_path)
@@ -21,10 +21,23 @@ def train_ai_model(data_path):
     df['MA20'] = df['close'].rolling(window=20).mean()
     df['price_change_ratio'] = df['close'].pct_change()
 
+    delta = df['close'].diff()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.ewm(com=13, min_periods=14).mean()
+    avg_loss = loss.ewm(com=13, min_periods=14).mean()
+    rs = avg_gain / avg_loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+
+    df['bollinger_upper'] = df['MA20'] + (df['close'].rolling(window=20).std() * 2)
+    df['bollinger_lower'] = df['MA20'] - (df['close'].rolling(window=20).std() * 2)
+
+
     df['target'] = (df['close'].shift(-1) > df['close']).astype(int)
 
     df = df.dropna()
-    features = ['MA5', 'MA20', 'price_change_ratio', 'volume']
+    
+    features = ['MA5', 'MA20', 'price_change_ratio', 'volume', 'RSI', 'bollinger_upper', 'bollinger_lower']
     x = df[features]
     y = df['target']
 
@@ -42,6 +55,7 @@ def train_ai_model(data_path):
 
     print("--- AI 모델 훈련 완료 ---")
     return model, df
+
 def main():
     print("AI 주가 예측 프로그램을 시작합니다.")
 
@@ -58,7 +72,7 @@ def main():
     joblib.dump(model, model_path)
     print(f"\n훈련된 AI 모델을 '{model_path}' 경로에 저장했습니다.")
 
-    latest_features = full_data[['MA5', 'MA20', 'price_change_ratio', 'volume']].iloc[[-1]]
+    latest_features = full_data[['MA5', 'MA20', 'price_change_ratio', 'volume', 'RSI', 'bollinger_upper', 'bollinger_lower']].iloc[[-1]]
 
     prediction = model.predict(latest_features)
 

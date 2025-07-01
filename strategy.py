@@ -47,12 +47,23 @@ def ai_strategy(daily_data, model_path='models/ai_model_v1.joblib'):
     df['MA20'] = df['close'].rolling(window=20).mean()
     df['price_change_ratio'] = df['close'].pct_change()
 
+    delta = df['close'].diff()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.ewm(com=13, min_periods=14).mean()
+    avg_loss = loss.ewm(com=13, min_periods=14).mean()
+    rs = avg_gain / avg_loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+
+    df['bollinger_upper'] = df['MA20'] + (df['close'].rolling(window=20).std() * 2)
+    df['bollinger_lower'] = df['MA20'] - (df['close'].rolling(window=20).std() * 2)
+
     df = df.dropna()
 
     if df.empty:
         return "HOLD"
 
-    features = ['MA5', 'MA20', 'price_change_ratio', 'volume']
+    features = ['MA5', 'MA20', 'price_change_ratio', 'volume', 'RSI', 'bollinger_upper', 'bollinger_lower']
     latest_features = df[features].iloc[[-1]]
 
     prediction = model.predict(latest_features)
