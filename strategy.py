@@ -70,5 +70,7 @@ def ai_strategy(daily_data, model_path='models/ai_model_v1.joblib'):
 
     if prediction[0] == 1:
         return "BUY"
+    elif prediction[0] == 2:
+        return "SELL"
     else:
         return "HOlD"

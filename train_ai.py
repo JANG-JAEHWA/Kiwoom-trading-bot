@@ -3,6 +3,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 import os
 import joblib
+import numpy as np
 
 def train_ai_model(data_path):
     """
@@ -34,6 +35,15 @@ def train_ai_model(data_path):
 
 
     df['target'] = (df['close'].shift(-1) > df['close']).astype(int)
+
+    price_change = df['close'].shift(-1) / df['close']
+
+    conditions = [
+        price_change >= 1.02,
+        price_change <= 0.98
+    ]
+    choices = [1, 2]
+    df['target'] = np.select(conditions, choices, default=0)
 
     df = df.dropna()
     
