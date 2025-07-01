@@ -135,5 +135,14 @@ class KiwoomAPI:
             print(f"[주문/채결] 상태: {order_status}, 종목: {stock_code}, 주문수량: {order_qty}, 체결가: {excuted_price}, 체결수량: {excuted_qty}")
         elif gubun == "1":
             print("잔고 변경 데이터 수신")
-                  
+
+    def get_code_list(self, market_code):
+        """
+        market_code: 0: 코스피, 10: 코스닥
+        """
+        print(f"{'코스피' if market_code == '0' else '코스닥'} 종목 코드 목록을 요청합니다.")
+        code_list_str = self.api.GetCodeListByMarket(market_code)
+        code_list = code_list_str.split(';')
+
+        return [code for code in code_list if code]
         
