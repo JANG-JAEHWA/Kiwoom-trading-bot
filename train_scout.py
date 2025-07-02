@@ -4,7 +4,7 @@ from sklearn.model_selection import train_test_split
 import os
 import joblib
 
-def train_scout_model():
+def run_scout_and_get_recommendations():
     print("--- AI 스카우터 훈련 시작---")
 
     summary_path = os.path.join("data", "market_summary.csv")
@@ -39,8 +39,10 @@ def train_scout_model():
     print("\n--- AI 스카우터 최종 추천 종목 ---")
     if recommended_stocks.empty:
         print("추천할 만한 종목을 찾지 못했습니다.")
+        return []
     else:
         print(recommended_stocks[['code', 'latest_return', 'latest_volatility']])
+        return recommended_stocks['code'].tolist()
 
     if not os.path.exists('models'):
         os.makedirs('models')
@@ -49,4 +51,4 @@ def train_scout_model():
     print("훈련된 스카우터 모델을 저장했습니다.")
 
 if __name__ == "__main__":
-    train_scout_model()
+    run_scout_and_get_recommendations()

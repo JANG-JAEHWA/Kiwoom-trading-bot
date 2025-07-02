@@ -48,6 +48,7 @@ def run_backtest(data_path, initial_capital=10000000, fee_tax_rate=0.002):
     print(f"최종 자산: {final_portfolio_value:,.0f}원")
     print(f"총 손익: {profit:,.0f}원")
     print(f"수익률: {profit_rate:.2f}%")
+    return profit_rate
 
 if __name__ == "__main__":
     csv_path = "data/005930_daily_data.csv"

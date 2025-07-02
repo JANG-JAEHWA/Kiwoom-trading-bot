@@ -32,6 +32,7 @@ def simple_ma_strategy(daily_data):
         return "SELL"
 
     return "HOLD"
+
 def ai_strategy(daily_data, model_path='models/ai_model_v1.joblib'):
     """
     ai가 판단하여 매수,매도 신호 반환
