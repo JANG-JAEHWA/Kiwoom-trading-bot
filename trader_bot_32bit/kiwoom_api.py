@@ -14,7 +14,9 @@ class KiwoomAPI(QObject):
 
         self.login_event_loop = QEventLoop()
         self.order_event_loop = QEventLoop()
+        self.tr_event_loop = QEventLoop()
         self.account_number = None
+        self.tr_data = None
         
         self.current_candle = {}
         self.current_window_start_time = None
@@ -22,6 +24,8 @@ class KiwoomAPI(QObject):
     def _set_event_handlers(self):
         """이벤트와 이벤트 핸들러를 연결합니다."""
         self.api.OnEventConnect.connect(self._event_connect)
+        self.api.OnReceiveRealData.connect(self._receive_real_data)
+        self.api.OnReceiveChejanData.connect(self._receive_chejan_data)
         self.api.OnReceiveRealData.connect(self._receive_real_data)
 
     def login(self):
