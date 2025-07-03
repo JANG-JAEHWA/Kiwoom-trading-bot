@@ -1,36 +1,34 @@
-import time
-from PyQt5.QtCore import QEventLoop, QDateTime
-import sys
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtCore import QEventLoop, QDateTime, QObject, pyqtSignal
 from PyQt5.QAxContainer import QAxWidget
 
-class KiwoomAPI:
+class KiwoomAPI(QObject):
+    log_signal = pyqtSignal(str)
+    login_success_signal = pyqtSignal()
+    candle_completed_signal = pyqtSignal(dict)
+    order_result_signal = pyqtSignal(dict)
+
     def __init__(self):
+        super().__init__()
         self.api = QAxWidget("KHOPENAPI.KHOpenAPICtrl.1")
         self._set_event_handlers()
-        self.login_event_loop = QEventLoop()
-        self.tr_event_loop = QEventLoop()
-        self.order_event_loop = QEventLoop()
 
-        self.tr_data = None
+        self.login_event_loop = QEventLoop()
+        self.order_event_loop = QEventLoop()
         self.account_number = None
         
         self.current_candle = {}
         self.current_window_start_time = None
-        self.log_signal = None
 
     def _set_event_handlers(self):
         """이벤트와 이벤트 핸들러를 연결합니다."""
         self.api.OnEventConnect.connect(self._event_connect)
-        self.api.OnReceiveTrData.connect(self._receive_tr_data)
-        self.api.OnReceiveChejanData.connect(self._receive_chejan_data)
         self.api.OnReceiveRealData.connect(self._receive_real_data)
 
     def login(self):
         """
         로그인 창을 띄우고, 응답이 올 때까지 대기합니다.
         """
-        print("로그인을 시도합니다.")
+        self.log_signal.emit("로그인을 시도합니다.")
         self.api.CommConnect()
         self.login_event_loop.exec_()
 
@@ -40,99 +38,21 @@ class KiwoomAPI:
         err_code가 0이면 성공입니다.
         """
         if err_code == 0:
-            if self.log_signal:
-                self.log_signal.emit("로그인에 성공했습니다.")
             self.account_number = self.api.GetLoginInfo("ACCNO").split(';')[0]
-            print(f"성공적으로 계좌번호를 가져왔습니다: {self.account_number}")
+            self.log_signal.emit("로그인에 성공했습니다.")
+            self.log_signal.emit(f"계좌번호: {self.account_number}")
+            self.login_success_signal.emit()
         else:
-            print(f"로그인에 실패했습니다. 에러 코드: {err_code}")
-
+            self.log_signal.emit(f"로그인에 실패했습니다. 에러 코드: {err_code}")
         self.login_event_loop.exit()
 
-    def get_daily_data(self, code, start_date="20250627", continuous=False):
-        """
-        지정한 종목의 일봉 데이터를 요청합니다.
-        TR 코드: opt10081
-        """
-        print(f"[{code}] 일봉 데이터 요청 중...")
-
-        all_data = []
-        
-        self.api.SetInputValue("종목코드", code)
-        self.api.SetInputValue("기준일자", start_date)
-        self.api.SetInputValue("수정주가구분", "1")#1: 수정주가, 0: 원주가
-
-        self.api.CommRqData("일봉데이터요청", "opt10081", 0, "0101")
-        self.tr_event_loop.exec_()
-
-        if self.tr_data:
-            all_data.extend(self.tr_data)
-
-        if continuous:
-            while self.api.dynamicCall("GetGlobalVariable(QString)", "prev_next") == "2":
-                print("연속 조회 진행 중...")
-                time.sleep(0.2)
-
-                self.api.SetInputValue("종목코드", code)
-                self.api.SetInputValue("기준일자", start_date)
-                self.api.SetInputValue("수정주가구분", "1")
-
-                self.api.CommRqData("일봉데이터요청", "opt10081", 2, "0101")
-                self.tr_event_loop.exec_()
-
-                if self.tr_data:
-                    all_data.extend(self.tr_data)
-                else:
-                    break
-                      
-        print(f"총 {len(all_data)}일치 데이터 수신 완료.")
-        return all_data
-
-    def _receive_tr_data(self, screen_no, rqname, trcode, record_name, prev_next, *args):
-        """
-        TR 요청에 대한 응답 수신 이벤트 핸들러
-        """
-        if rqname == "일봉데이터요청":
-            print("일봉 데이터 수신 완료.")
-            count = self.api.GetRepeatCnt(trcode, rqname)
-            data_list = []
-            for i in range(count):
-                data = {
-                    'date': self.api.GetCommData(trcode, rqname, i, "일자").strip(),
-                    'open': int(self.api.GetCommData(trcode, rqname, i, "시가").strip()),
-                    'high': int(self.api.GetCommData(trcode, rqname, i, "고가").strip()),
-                    'low': int(self.api.GetCommData(trcode, rqname, i, "저가").strip()),
-                    'close': int(self.api.GetCommData(trcode, rqname, i, "현재가").strip()),
-                    'volume': int(self.api.GetCommData(trcode, rqname, i, "거래량").strip())
-                }
-                data_list.append(data)
-            self.tr_data = data_list
-        elif rqname == "주식분봉차트조회":
-            print("분봉 데이터 수신.")
-            count = self.api.GetRepeatCnt(trcode, rqname)
-
-            if count == 0:
-                self.tr_data = []
-            else:
-                data_list = []
-                for i in range(count):
-                    item = {
-                        'date': self.api.GetCommData(trcode, rqname, i, "체결시간").strip(),
-                        'open': abs(int(self.api.GetCommData(trcode, rqname, i, "시가"))),
-                        'high': abs(int(self.api.GetCommData(trcode, rqname, i, "고가"))),
-                        'low': abs(int(self.api.GetCommData(trcode, rqname, i, "저가"))),
-                        'close': abs(int(self.api.GetCommData(trcode, rqname, i, "현재가"))),
-                        'volume': int(self.api.GetCommData(trcode, rqname, i, "거래량"))
-                    }
-                    data_list.append(item)
-                self.tr_event_loop.exit()
-
-    def subscribe_realtime_data(self, screen_no, code_list_str, fid_list_str, real_type):
+    def subscribe_realtime_data(self, screen_no, code, fid_list_str, real_type):
         """
         real_type: 0 - 최초구독, 1 - 종목 추가/삭제
         """
-        print("실시간 데이터 구독을 신청합니다...")
-        self.api.SetRealReg(screen_no, code_list_str, fid_list_str, real_type)
+        self.log_signal.emit(f"[{code}]실시간 데이터 구독을 신청합니다...")
+        self.api.SetRealReg(screen_no, code, fid_list_str, real_type)
+
     def ubsubscribe_realtime_data(self, screen_no, code):
         self.api.SetRealRemove(screen_no, code)
     
@@ -147,15 +67,15 @@ class KiwoomAPI:
 
             minute = trade_time.time().minute()
             window_minute = (minute // 3) * 3
-            window_start_time = trade_time.date().toString('yyyy-MM-dd') + f"{trade_time.time().hour():02d}:{window_minute:02d}:00"
+            window_start_qtime = QDateTime(trade_time.date(), trade_time.time().toPyTime().replace(minute=window_minute, second=0, microsecond=0))
 
-            if window_start_time != self.current_window_start_time:
+            if self.current_window_start_time is None or window_start_qtime > self.current_window_start_time:
                 if self.current_candle:
-                    if hasattr(str, 'on_candle_completed'):
-                        self.on_candle_completed(self.current_candle)
-                self.current_window_start_time = window_start_time
+                    self.candle_completed_signal.emit(self.current_candle)
+                
+                self.current_window_start_time = window_start_qtime
                 self.current_candle = {
-                    'time': window_start_time,
+                    'time': window_start_qtime.toString('yyyy-MM-dd HH:mm:ss'),
                     'open': current_price,
                     'high': current_price,
                     'low': current_price,
@@ -183,7 +103,7 @@ class KiwoomAPI:
         hoga_gb: 거래구분(가격 유형) ("00":지정가, "03":시장가)
         org_order_no: 원주문번호 (정정/취소 주문 시 사용, 신규 주문은 "")
         """
-        print("\n주문 전송을 시도합니다...")
+        self.log_signal.emit(f"\n[{code}] {qty}주 주문 전송을 시도합니다...")
         self.api.SendOrder(
             rqname, screen_no, acc_no, order_type, code, qty, price, hoga_gb, org_order_no
         )
@@ -208,8 +128,8 @@ class KiwoomAPI:
             if excuted_qty_str:
                 excuted_qty = int(excuted_qty_str)
                 
-            print(f"[주문/채결] 상태: {order_status}, 종목: {stock_code}, 주문수량: {order_qty}, 체결가: {excuted_price}, 체결수량: {excuted_qty}")
-            if order_status == "접수":
+            self.log_signal.emit(f"[주문/채결] 상태: {order_status}, 종목: {stock_code}, 주문수량: {order_qty}, 체결가: {excuted_price}, 체결수량: {excuted_qty}")
+            if order_status in ["접수", "체결"]:
                 self.order_event_loop.exit()
         elif gubun == "1":
             print("잔고 변경 데이터 수신")
@@ -245,3 +165,5 @@ class KiwoomAPI:
         self.tr_event_loop.exec_()
         return self.tr_data
 
+    def get_connect_state(self):
+        return self.api.GetConnectState() #0-미연결, 1-연결

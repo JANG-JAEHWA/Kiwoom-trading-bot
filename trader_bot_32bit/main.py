@@ -3,7 +3,6 @@ import pandas as pd
 import sys
 from PyQt5.QtWidgets import QApplication
 from kiwoom_api import KiwoomAPI
-from strategy import simple_ma_strategy
 
 def main():
     print("AI 트레이딩 시스템 - 데이터 수집기 시작")
