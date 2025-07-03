@@ -11,6 +11,7 @@ class KiwoomAPI:
         self._set_event_handlers()
         self.login_event_loop = QEventLoop()
         self.tr_event_loop = QEventLoop()
+        self.order_event_loop = QEventLoop()
         self.tr_data = None
         self.account_number = None
         self.current_candle = {}
@@ -148,9 +149,8 @@ class KiwoomAPI:
 
             if window_start_time != self.current_window_start_time:
                 if self.current_candle:
-                    print("\n--- [3분봉 완성] ---")
-                    print(self.current_candle)
-                    print("--------------------")
+                    if hasattr(str, 'on_candle_completed'):
+                        self.on_candle_completed(self.current_candle)
                 self.current_window_start_time = window_start_time
                 self.current_candle = {
                     'time': window_start_time,
@@ -160,7 +160,6 @@ class KiwoomAPI:
                     'close': current_price,
                     'volume': trade_volume
                 }
-                print(f"\n>>> 새로운 3분봉 시작: {window_start_time}")
             else:
                 self.current_candle['high'] = max(self.current_candle['high'],current_price)
                 self.current_candle['low'] = min(self.current_candle['low'],current_price)
@@ -186,18 +185,30 @@ class KiwoomAPI:
         self.api.SendOrder(
             rqname, screen_no, acc_no, order_type, code, qty, price, hoga_gb, org_order_no
         )
+        self.order_event_loop.exec_()
 
     def _receive_chejan_data(self, gubun, item_cnt, fid_list):
         """
         gubun 0: 주문 접수/채결, 1: 국내주식 잔고
         """
         if gubun == "0":
-            order_status = self.api.GetChejanData("913") # 주문상태
-            stock_code = self.api.GetChejanData("9001")[1:] # 종목코드
-            order_qty = int(self.api.GetChejanData("900")) # 주문수량
-            excuted_price = int(self.api.GetChejanData("910")) # 체결가
-            excuted_qty = int(self.api.GetChejanData("911")) # 체결수량
+            order_status = self.api.GetChejanData(913) # 주문상태
+            stock_code = self.api.GetChejanData(9001)[1:] # 종목코드
+            order_qty = int(self.api.GetChejanData(900)) # 주문수량
+            excuted_price_str = self.api.GetChejanData(910)# 체결가
+            excuted_qty_str = self.api.GetChejanData(911) # 체결수량
+
+            excuted_price = 0
+            excuted_qty = 0
+
+            if excuted_price_str:
+                excuted_price = int(excuted_price_str)
+            if excuted_qty_str:
+                excuted_qty = int(excuted_qty_str)
+                
             print(f"[주문/채결] 상태: {order_status}, 종목: {stock_code}, 주문수량: {order_qty}, 체결가: {excuted_price}, 체결수량: {excuted_qty}")
+            if order_status == "접수":
+                self.order_event_loop.exit()
         elif gubun == "1":
             print("잔고 변경 데이터 수신")
 
