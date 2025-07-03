@@ -1,6 +1,9 @@
 data/
 models/
 
+*.txt
+realtime_data.csv
+
 config.py
 
 venv/

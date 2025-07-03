@@ -1,5 +1,5 @@
 import time
-from PyQt5.QtCore import QEventLoop
+from PyQt5.QtCore import QEventLoop, QDateTime
 import sys
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QAxContainer import QAxWidget
@@ -13,12 +13,15 @@ class KiwoomAPI:
         self.tr_event_loop = QEventLoop()
         self.tr_data = None
         self.account_number = None
+        self.current_candle = {}
+        self.current_window_start_time = None
 
     def _set_event_handlers(self):
         """이벤트와 이벤트 핸들러를 연결합니다."""
         self.api.OnEventConnect.connect(self._event_connect)
-        self.api.OnReceiveTrData.connect(self._recieve_tr_data)
+        self.api.OnReceiveTrData.connect(self._receive_tr_data)
         self.api.OnReceiveChejanData.connect(self._receive_chejan_data)
+        self.api.OnReceiveRealData.connect(self._receive_real_data)
 
     def login(self):
         """
@@ -82,7 +85,7 @@ class KiwoomAPI:
         print(f"총 {len(all_data)}일치 데이터 수신 완료.")
         return all_data
 
-    def _recieve_tr_data(self, screen_no, rqname, trcode, record_name, prev_next, *args):
+    def _receive_tr_data(self, screen_no, rqname, trcode, record_name, prev_next, *args):
         """
         TR 요청에 대한 응답 수신 이벤트 핸들러
         """
@@ -97,11 +100,73 @@ class KiwoomAPI:
                     'high': int(self.api.GetCommData(trcode, rqname, i, "고가").strip()),
                     'low': int(self.api.GetCommData(trcode, rqname, i, "저가").strip()),
                     'close': int(self.api.GetCommData(trcode, rqname, i, "현재가").strip()),
-                    'volume': int(self.api.GetCommData(trcode, rqname, i, "일자").strip())
+                    'volume': int(self.api.GetCommData(trcode, rqname, i, "거래량").strip())
                 }
                 data_list.append(data)
             self.tr_data = data_list
-        self.tr_event_loop.exit()
+        elif rqname == "주식분봉차트조회":
+            print("분봉 데이터 수신.")
+            count = self.api.GetRepeatCnt(trcode, rqname)
+
+            if count == 0:
+                self.tr_data = []
+            else:
+                data_list = []
+                for i in range(count):
+                    item = {
+                        'date': self.api.GetCommData(trcode, rqname, i, "체결시간").strip(),
+                        'open': abs(int(self.api.GetCommData(trcode, rqname, i, "시가"))),
+                        'high': abs(int(self.api.GetCommData(trcode, rqname, i, "고가"))),
+                        'low': abs(int(self.api.GetCommData(trcode, rqname, i, "저가"))),
+                        'close': abs(int(self.api.GetCommData(trcode, rqname, i, "현재가"))),
+                        'volume': int(self.api.GetCommData(trcode, rqname, i, "거래량"))
+                    }
+                    data_list.append(item)
+                self.tr_event_loop.exit()
+
+    def subscribe_realtime_data(self, screen_no, code_list_str, fid_list_str, real_type):
+        """
+        real_type: 0 - 최초구독, 1 - 종목 추가/삭제
+        """
+        print("실시간 데이터 구독을 신청합니다...")
+        self.api.SetRealReg(screen_no, code_list_str, fid_list_str, real_type)
+    def ubsubscribe_realtime_data(self, screen_no, code):
+        self.api.SetRealRemove(screen_no, code)
+    
+    def _receive_real_data(self, code, real_type, real_data):
+        if real_type == "주식체결":
+            trade_time_str = self.api.GetCommRealData(code, 20)
+            current_price = abs(int(self.api.GetCommRealData(code, 10)))
+            trade_volume = abs(int(self.api.GetCommRealData(code, 15)))
+            
+            now = QDateTime.currentDateTime()
+            trade_time = QDateTime.fromString(now.toString('yyyyMMdd') + trade_time_str, 'yyyyMMddHHmmss')
+
+            minute = trade_time.time().minute()
+            window_minute = (minute // 3) * 3
+            window_start_time = trade_time.date().toString('yyyy-MM-dd') + f"{trade_time.time().hour():02d}:{window_minute:02d}:00"
+
+            if window_start_time != self.current_window_start_time:
+                if self.current_candle:
+                    print("\n--- [3분봉 완성] ---")
+                    print(self.current_candle)
+                    print("--------------------")
+                self.current_window_start_time = window_start_time
+                self.current_candle = {
+                    'time': window_start_time,
+                    'open': current_price,
+                    'high': current_price,
+                    'low': current_price,
+                    'close': current_price,
+                    'volume': trade_volume
+                }
+                print(f"\n>>> 새로운 3분봉 시작: {window_start_time}")
+            else:
+                self.current_candle['high'] = max(self.current_candle['high'],current_price)
+                self.current_candle['low'] = min(self.current_candle['low'],current_price)
+                self.current_candle['close'] = current_price
+                self.current_candle['volume'] += trade_volume
+                print(f"\r[실시간 업데이트] 현재가:{current_price:,} | 고가:{self.current_candle['high']:,} | 저가:{self.current_candle['low']:,} | 누적거래량:{self.current_candle['volume']:,}", end="")
 
     def send_order(self, rqname, screen_no, acc_no, order_type, code, qty, price, hoga_gb, org_order_no):
         """
@@ -145,4 +210,25 @@ class KiwoomAPI:
         code_list = code_list_str.split(';')
 
         return [code for code in code_list if code]
+    
+    def get_minute_data(self, code, tick_range=3):
+        """
+        tick_range = 몇분봉
+        """
+
+        print(f"[{code}] {tick_range}분봉 데이터 요청 중...")
+        self.api.SetInputValue("종목코드", code)
+        self.api.SetInputValue("틱범위", str(tick_range))
+        self.api.SetInputValue("수정주가구분", "1")
+
+        self.tr_data = None
+
+        res = self.api.CommRqData("주식분봉차트조회", "opt10080", 0, "0101")
+
+        if res != 0:
+            print(f"분봉 데이터 요청 실패. 에러코드: {res}")
+            return None
         
+        self.tr_event_loop.exec_()
+        return self.tr_data
+
