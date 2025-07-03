@@ -43,29 +43,15 @@ def ai_strategy(daily_data, model_path='models/ai_model_v1.joblib'):
         print(f"오류: AI 모델 파일이 없음: {model_path}")
         return "HOLD"
 
-    df = daily_data.copy()
-    df['MA5'] = df['close'].rolling(window=5).mean()
-    df['MA20'] = df['close'].rolling(window=20).mean()
-    df['price_change_ratio'] = df['close'].pct_change()
+    df = pd.DataFrame(daily_data)
+    features_df = generate_features(df)
+    
 
-    delta = df['close'].diff()
-    gain = delta.where(delta > 0, 0)
-    loss = -delta.where(delta < 0, 0)
-    avg_gain = gain.ewm(com=13, min_periods=14).mean()
-    avg_loss = loss.ewm(com=13, min_periods=14).mean()
-    rs = avg_gain / avg_loss
-    df['RSI'] = 100 - (100 / (1 + rs))
-
-    df['bollinger_upper'] = df['MA20'] + (df['close'].rolling(window=20).std() * 2)
-    df['bollinger_lower'] = df['MA20'] - (df['close'].rolling(window=20).std() * 2)
-
-    df = df.dropna()
-
-    if df.empty:
+    if features_df.empty:
         return "HOLD"
 
     features = ['MA5', 'MA20', 'price_change_ratio', 'volume', 'RSI', 'bollinger_upper', 'bollinger_lower']
-    latest_features = df[features].iloc[[-1]]
+    latest_features = features_df[features].iloc[[-1]]
 
     prediction = model.predict(latest_features)
 
@@ -75,3 +61,23 @@ def ai_strategy(daily_data, model_path='models/ai_model_v1.joblib'):
         return "SELL"
     else:
         return "HOlD"
+
+def generate_features(df):
+    df_new = df.copy()
+    df_new['MA5'] = df_new['close'].rolling(window=5).mean()
+    df_new['MA20'] = df_new['close'].rolling(window=20).mean()
+    df_new['price_change_ratio'] = df_new['close'].pct_change()
+
+    delta = df_new['close'].diff()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.ewm(com=13, min_periods=14).mean()
+    avg_loss = loss.ewm(com=13, min_periods=14).mean()
+    rs = avg_gain / avg_loss
+    df_new['RSI'] = 100 - (100 / (1 + rs))
+
+    df_new['bollinger_upper'] = df_new['MA20'] + (df_new['close'].rolling(window=20).std() * 2)
+    df_new['bollinger_lower'] = df_new['MA20'] - (df_new['close'].rolling(window=20).std() * 2)
+
+    return df_new.dropna()
+    

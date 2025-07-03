@@ -1,9 +1,12 @@
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
+from strategy import generate_features
 import os
 import joblib
 import numpy as np
+
+PROJECT_ROOT_PATH = "C:/program trading system"
 
 def train_ai_model(data_path):
     """
@@ -18,23 +21,7 @@ def train_ai_model(data_path):
         print(f"데이터 파일을 찾을 수 없습니다: {data_path}")
         return None, None
 
-    df['MA5'] = df['close'].rolling(window=5).mean()
-    df['MA20'] = df['close'].rolling(window=20).mean()
-    df['price_change_ratio'] = df['close'].pct_change()
-
-    delta = df['close'].diff()
-    gain = delta.where(delta > 0, 0)
-    loss = -delta.where(delta < 0, 0)
-    avg_gain = gain.ewm(com=13, min_periods=14).mean()
-    avg_loss = loss.ewm(com=13, min_periods=14).mean()
-    rs = avg_gain / avg_loss
-    df['RSI'] = 100 - (100 / (1 + rs))
-
-    df['bollinger_upper'] = df['MA20'] + (df['close'].rolling(window=20).std() * 2)
-    df['bollinger_lower'] = df['MA20'] - (df['close'].rolling(window=20).std() * 2)
-
-
-    df['target'] = (df['close'].shift(-1) > df['close']).astype(int)
+    df = generate_features(df)
 
     price_change = df['close'].shift(-1) / df['close']
 
@@ -69,16 +56,18 @@ def train_ai_model(data_path):
 def main():
     print("AI 주가 예측 프로그램을 시작합니다.")
 
-    csv_path = os.path.join("data", "005930_daily_data.csv")
+    stock_code = "005930"
+    csv_path = os.path.join(PROJECT_ROOT_PATH, "data", f"{stock_code}_daily_data.csv")
     model, full_data = train_ai_model(csv_path)
 
     if model is None:
         print("모델 훈련 실패 프로그램 종료")
         return
-    if not os.path.exists('models'):
-        os.makedirs('models')
+    model_dir = '../models'
+    if not os.path.exists(model_dir):
+        os.makedirs(model_dir)
 
-    model_path = os.path.join('models', 'ai_model_v1.joblib')
+    model_path = os.path.join(model_dir, f'strategist_{stock_code}.joblib')
     joblib.dump(model, model_path)
     print(f"\n훈련된 AI 모델을 '{model_path}' 경로에 저장했습니다.")
 
