@@ -3,7 +3,6 @@ from PyQt5.QtCore import QEventLoop, QDateTime
 import sys
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QAxContainer import QAxWidget
-from PyQt5.QtCore import QEventLoop
 
 class KiwoomAPI:
     def __init__(self):
@@ -12,10 +11,13 @@ class KiwoomAPI:
         self.login_event_loop = QEventLoop()
         self.tr_event_loop = QEventLoop()
         self.order_event_loop = QEventLoop()
+
         self.tr_data = None
         self.account_number = None
+        
         self.current_candle = {}
         self.current_window_start_time = None
+        self.log_signal = None
 
     def _set_event_handlers(self):
         """이벤트와 이벤트 핸들러를 연결합니다."""
@@ -38,9 +40,9 @@ class KiwoomAPI:
         err_code가 0이면 성공입니다.
         """
         if err_code == 0:
-            print("로그인에 성공했습니다.")
-            account_numbers = self.api.GetLoginInfo("ACCNO")
-            self.account_number = account_numbers.split(';')[0]
+            if self.log_signal:
+                self.log_signal.emit("로그인에 성공했습니다.")
+            self.account_number = self.api.GetLoginInfo("ACCNO").split(';')[0]
             print(f"성공적으로 계좌번호를 가져왔습니다: {self.account_number}")
         else:
             print(f"로그인에 실패했습니다. 에러 코드: {err_code}")
