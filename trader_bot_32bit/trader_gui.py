@@ -5,11 +5,12 @@ from PyQt5.QtCore import  QThread, pyqtSignal
 from kiwoom_api import KiwoomAPI
 
 class KiwoomWorker(QThread):
-    def __init__(self, kiwoom_instance):
+    def __init__(self, kiwoom_instance, task, **kwargs):
         super().__init__()
         self.kiwoom = kiwoom_instance
-        self.task = None
-        self.kwargs = {}
+        self.task = task
+        self.kwargs = kwargs
+
 
     def run(self):
         if self.task == "login":
@@ -26,7 +27,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.kiwoom = KiwoomAPI()
-        self.worker = KiwoomWorker(self.kiwoom)
+        self.worker = None
 
         self.initUI()
 
@@ -35,7 +36,7 @@ class MainWindow(QMainWindow):
         self.kiwoom.candle_completed_signal.connect(self.on_candle_completed)
 
     def initUI(self):
-        self.setWindowTitle('AI 자동매매 시스템 v1.1 - 최종')
+        self.setWindowTitle('AI 자동매매 시스템 v1.1')
         self.setGeometry(300, 300, 500, 400) #x, y, 너비, 높이
 
         central_widget = QWidget()
@@ -63,12 +64,13 @@ class MainWindow(QMainWindow):
     
     def on_start_button_clicked(self):
         if self.kiwoom.get_connect_state() == 0:
-            self.worker.set_task("login")
+            self.worker = KiwoomWorker(self.kiwoom, "login")
             self.worker.start()
             self.start_button.setDisabled(True)
         else:
             code = self.stock_code_input.text()
-            self.worker.set_task("monitor", code=code)
+            self.update_log(f"{code} 종목 실시간 모니터링을 시작합니다.")
+            self.worker = KiwoomWorker(self.kiwoom, "monitor", code=code)
             self.worker.start()
             self.start_button.setText("모니터링 중...")
             self.start_button.setDisabled(True)
