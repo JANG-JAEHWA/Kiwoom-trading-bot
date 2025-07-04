@@ -5,9 +5,9 @@ import os
 import time
 
 STOCK_CODE = "005930"
-LIVE_DATA_PATH = "../data/live_data.csv"
-MODEL_PATH = f"../models/strategist_{STOCK_CODE}.joblib"
-SIGNAL_PATH = "../signal.txt"
+MODEL_PATH = f"C:/program trading system/models/strategist_{STOCK_CODE}.joblib"
+LIVE_DATA_PATH = "C:/program trading system/data/live_data.csv"
+SIGNAL_PATH = "C:/program trading system/signal.txt"
 
 def load_latest_data(path: str) -> pd.DataFrame | None:
     try:
