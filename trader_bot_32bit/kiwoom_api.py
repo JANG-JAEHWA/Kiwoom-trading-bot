@@ -1,5 +1,6 @@
 from PyQt5.QtCore import QEventLoop, QDateTime, QObject, pyqtSignal
 from PyQt5.QAxContainer import QAxWidget
+import time
 
 class KiwoomAPI(QObject):
     log_signal = pyqtSignal(str)
@@ -14,7 +15,7 @@ class KiwoomAPI(QObject):
 
         self.login_event_loop = QEventLoop()
         self.order_event_loop = QEventLoop()
-        self.tr_event_loop = QEventLoop()
+        #self.tr_event_loop = QEventLoop()
         self.account_number = None
         self.tr_data = None
         
@@ -24,9 +25,9 @@ class KiwoomAPI(QObject):
     def _set_event_handlers(self):
         """이벤트와 이벤트 핸들러를 연결합니다."""
         self.api.OnEventConnect.connect(self._event_connect)
+        self.api.OnReceiveTrData.connect(self._receive_tr_data)
         self.api.OnReceiveRealData.connect(self._receive_real_data)
         self.api.OnReceiveChejanData.connect(self._receive_chejan_data)
-        self.api.OnReceiveRealData.connect(self._receive_real_data)
 
     def login(self):
         """
@@ -57,8 +58,8 @@ class KiwoomAPI(QObject):
         self.log_signal.emit(f"[{code}]실시간 데이터 구독을 신청합니다...")
         self.api.SetRealReg(screen_no, code, fid_list_str, real_type)
 
-    def ubsubscribe_realtime_data(self, screen_no, code):
-        self.api.SetRealRemove(screen_no, code)
+    def unsubscribe_realtime_data(self, screen_no="0101"):
+        self.api.DisconnectRealData(screen_no)
     
     def _receive_real_data(self, code, real_type, real_data):
         if real_type == "주식체결":
@@ -148,26 +149,64 @@ class KiwoomAPI(QObject):
 
         return [code for code in code_list if code]
     
-    def get_minute_data(self, code, tick_range=3):
+    def get_minute_data(self, code, tick_range=3, continuous=False):
         """
         tick_range = 몇분봉
         """
-
-        print(f"[{code}] {tick_range}분봉 데이터 요청 중...")
+        all_data = []
+        self.prev_next = "0"
+        self.tr_event_loop = QEventLoop()
+        self.log_signal.emit(f"[{code}] {tick_range}분봉 데이터 요청 중...")
         self.api.SetInputValue("종목코드", code)
         self.api.SetInputValue("틱범위", str(tick_range))
         self.api.SetInputValue("수정주가구분", "1")
+        self.api.CommRqData("주식분봉차트조회", "opt10080", 0, "0101")
 
-        self.tr_data = None
-
-        res = self.api.CommRqData("주식분봉차트조회", "opt10080", 0, "0101")
-
-        if res != 0:
-            print(f"분봉 데이터 요청 실패. 에러코드: {res}")
-            return None
-        
         self.tr_event_loop.exec_()
-        return self.tr_data
+        if self.tr_data:
+            all_data.extend(self.tr_data)
+
+        if continuous:
+            while self.prev_next == "2":
+                self.log_signal.emit("연속 조회 진행 중...")
+                time.sleep(3.6)
+
+                self.tr_event_loop = QEventLoop()
+                self.api.SetInputValue("종목코드", code)
+                self.api.SetInputValue("틱범위", str(tick_range))
+                self.api.SetInputValue("수정주가구분", "1")
+
+                res = self.api.CommRqData("주식분봉차트조회", "opt10080", 2, "0101")
+
+                self.tr_event_loop.exec_()
+
+                if self.tr_data:
+                    all_data.extend(self.tr_data)
+                else:
+                    break
+        self.log_signal.emit(f"총 {len(all_data)}개 분봉 데이터 수신 완료")       
+        return all_data
 
     def get_connect_state(self):
         return self.api.GetConnectState() #0-미연결, 1-연결
+
+    def _receive_tr_data(self, screen_no, rqname, trcode, record_name, prev_next, *args):
+        self.prev_next = prev_next
+        if rqname == "주식분봉차트조회":
+            count = self.api.GetRepeatCnt(trcode, rqname)
+            data_list = []
+            if count > 0:
+                for i in range(count):
+                    item = {
+                        'date': self.api.GetCommData(trcode, rqname, i, "체결시간" if rqname == "주식분봉차트조회" else "일자").strip(),
+                        'open': abs(int(self.api.GetCommData(trcode, rqname, i, "시가"))),
+                        'high': abs(int(self.api.GetCommData(trcode, rqname, i, "고가"))),
+                        'low': abs(int(self.api.GetCommData(trcode, rqname, i, "저가"))),
+                        'close': abs(int(self.api.GetCommData(trcode, rqname, i, "현재가"))),
+                        'volume': int(self.api.GetCommData(trcode, rqname, i, "거래량"))
+                    }
+                    data_list.append(item)
+            self.tr_data = data_list
+        
+        if hasattr(self, 'tr_event_loop') and self.tr_event_loop.isRunning():
+            self.tr_event_loop.exit()
