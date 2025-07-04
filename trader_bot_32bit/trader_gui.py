@@ -3,6 +3,8 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QWidget,
                              QPushButton, QTextEdit, QLabel, QLineEdit, QHBoxLayout)
 from PyQt5.QtCore import  QThread, pyqtSignal, QTimer, QDateTime
 from kiwoom_api import KiwoomAPI
+import pandas as pd
+import os
 
 class KiwoomWorker(QThread):
     def __init__(self, kiwoom_instance, task, **kwargs):
@@ -113,6 +115,17 @@ class MainWindow(QMainWindow):
     
     def on_candle_completed(self, candle_data):
         self.update_log(f"[3분봉 완성] {candle_data}")
+        try:
+            live_data_path = "../data/live_data.csv"
+            df = pd.DataFrame([candle_data])
+
+            if not os.path.exists(live_data_path):
+                df.to_csv(live_data_path, index=False, encoding='utf-8-sig')
+            else:
+                df.to_csv(live_data_path, mode='a', header=False, index=False, encoding='utf-8-sig')
+        except Exception as e:
+            self.update_log(f"파일 저장 중 오류 발생: {e}")
+
         
     def closeEvent(self, event):
         QApplication.instance().quit()

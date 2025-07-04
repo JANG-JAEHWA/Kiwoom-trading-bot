@@ -9,10 +9,10 @@ LIVE_DATA_PATH = "../data/live_data.csv"
 MODEL_PATH = f"../models/strategist_{STOCK_CODE}.joblib"
 SIGNAL_PATH = "../signal.txt"
 
-def load_latest_data():
+def load_latest_data(path: str) -> pd.DataFrame | None:
     try:
-        return pd.read_csv(LIVE_DATA_PATH)
-    except:
+        return pd.read_csv(path)
+    except FileNotFoundError:
         return None
     
 def make_prediction(model, live_data: pd.DataFrame) -> str:
@@ -70,7 +70,7 @@ def run_ai_controller():
             break
         except Exception as e:
             print(f"오류 발생: {e}")
-            time.sleep(60)
+            time.sleep(10)
 
 if __name__ == "__main__":
     run_ai_controller()
