@@ -7,6 +7,10 @@ class KiwoomAPI(QObject):
     login_success_signal = pyqtSignal()
     candle_completed_signal = pyqtSignal(dict)
     order_result_signal = pyqtSignal(dict)
+    progress_signal = pyqtSignal(str)
+
+    collection_done_signal = pyqtSignal()
+    page_data_received_signal = pyqtSignal(list)
 
     def __init__(self):
         super().__init__()
@@ -14,11 +18,12 @@ class KiwoomAPI(QObject):
         self._set_event_handlers()
 
         self.login_event_loop = QEventLoop()
-        self.order_event_loop = QEventLoop()
-        #self.tr_event_loop = QEventLoop()
+
         self.account_number = None
         self.tr_data = None
-        
+        self.current_code = ""
+        self.req_manager = None
+
         self.current_candle = {}
         self.current_window_start_time = None
 
@@ -28,6 +33,9 @@ class KiwoomAPI(QObject):
         self.api.OnReceiveTrData.connect(self._receive_tr_data)
         self.api.OnReceiveRealData.connect(self._receive_real_data)
         self.api.OnReceiveChejanData.connect(self._receive_chejan_data)
+    
+    def set_request_manager(self, req_manager):
+        self.req_manager = req_manager
 
     def login(self):
         """
@@ -58,7 +66,7 @@ class KiwoomAPI(QObject):
         self.log_signal.emit(f"[{code}]실시간 데이터 구독을 신청합니다...")
         self.api.SetRealReg(screen_no, code, fid_list_str, real_type)
 
-    def unsubscribe_realtime_data(self, screen_no="0101"):
+    def disconnect_realtime_data(self, screen_no="0101"):
         self.api.DisconnectRealData(screen_no)
     
     def _receive_real_data(self, code, real_type, real_data):
@@ -122,81 +130,46 @@ class KiwoomAPI(QObject):
             order_status = self.api.GetChejanData(913) # 주문상태
             stock_code = self.api.GetChejanData(9001)[1:] # 종목코드
             order_qty = int(self.api.GetChejanData(900)) # 주문수량
-            excuted_price_str = self.api.GetChejanData(910)# 체결가
-            excuted_qty_str = self.api.GetChejanData(911) # 체결수량
+            executed_price_str = self.api.GetChejanData(910)# 체결가
+            executed_qty_str = self.api.GetChejanData(911) # 체결수량
 
-            excuted_price = 0
-            excuted_qty = 0
+            executed_price = 0
+            executed_qty = 0
 
-            if excuted_price_str:
-                excuted_price = int(excuted_price_str)
-            if excuted_qty_str:
-                excuted_qty = int(excuted_qty_str)
+            if executed_price_str:
+                executed_price = int(executed_price_str)
+            if executed_qty_str:
+                executed_qty = int(executed_qty_str)
                 
-            self.log_signal.emit(f"[주문/채결] 상태: {order_status}, 종목: {stock_code}, 주문수량: {order_qty}, 체결가: {excuted_price}, 체결수량: {excuted_qty}")
+            self.log_signal.emit(f"[주문/채결] 상태: {order_status}, 종목: {stock_code}, 주문수량: {order_qty}, 체결가: {executed_price}, 체결수량: {executed_qty}")
             if order_status in ["접수", "체결"]:
                 self.order_event_loop.exit()
-        elif gubun == "1":
-            print("잔고 변경 데이터 수신")
 
     def get_code_list(self, market_code):
-        """
-        market_code: 0: 코스피, 10: 코스닥
-        """
-        print(f"{'코스피' if market_code == '0' else '코스닥'} 종목 코드 목록을 요청합니다.")
-        code_list_str = self.api.GetCodeListByMarket(market_code)
-        code_list = code_list_str.split(';')
-
-        return [code for code in code_list if code]
-    
-    def get_minute_data(self, code, tick_range=3, continuous=False):
-        """
-        tick_range = 몇분봉
-        """
-        all_data = []
-        self.prev_next = "0"
-        self.tr_event_loop = QEventLoop()
-        self.log_signal.emit(f"[{code}] {tick_range}분봉 데이터 요청 중...")
-        self.api.SetInputValue("종목코드", code)
-        self.api.SetInputValue("틱범위", str(tick_range))
-        self.api.SetInputValue("수정주가구분", "1")
-        self.api.CommRqData("주식분봉차트조회", "opt10080", 0, "0101")
-
-        self.tr_event_loop.exec_()
-        if self.tr_data:
-            all_data.extend(self.tr_data)
-
-        if continuous:
-            while self.prev_next == "2":
-                self.log_signal.emit("연속 조회 진행 중...")
-                time.sleep(3.6)
-
-                self.tr_event_loop = QEventLoop()
-                self.api.SetInputValue("종목코드", code)
-                self.api.SetInputValue("틱범위", str(tick_range))
-                self.api.SetInputValue("수정주가구분", "1")
-
-                res = self.api.CommRqData("주식분봉차트조회", "opt10080", 2, "0101")
-
-                self.tr_event_loop.exec_()
-
-                if self.tr_data:
-                    all_data.extend(self.tr_data)
-                else:
-                    break
-        self.log_signal.emit(f"총 {len(all_data)}개 분봉 데이터 수신 완료")       
-        return all_data
+        return self.api.GetCodeListByMarket(market_code).split(';')[:-1]
 
     def get_connect_state(self):
         return self.api.GetConnectState() #0-미연결, 1-연결
+    
+    def get_minute_data_page(self, code, tick_range=3, is_continuous_request=False):
+        self.tr_event_loop = QEventLoop()
+        self.current_code = code
+
+        self.api.SetInputValue("종목코드", code)
+        self.api.SetInputValue("틱범위", str(tick_range))
+        self.api.SetInputValue("수정주가구분", "1")
+        self.tr_data = None
+        self.api.CommRqData("주식분봉차트조회", "opt10080", 2 if is_continuous_request else 0, "0101")
+        self.tr_event_loop.exec_()
+        return self.tr_data, getattr(self, 'prev_next', '0')
+
 
     def _receive_tr_data(self, screen_no, rqname, trcode, record_name, prev_next, *args):
-        self.prev_next = prev_next
         if rqname == "주식분봉차트조회":
             count = self.api.GetRepeatCnt(trcode, rqname)
-            data_list = []
-            if count > 0:
-                for i in range(count):
+            page_data =[]
+            for i in range(count):
+                try:
                     item = {
                         'date': self.api.GetCommData(trcode, rqname, i, "체결시간" if rqname == "주식분봉차트조회" else "일자").strip(),
                         'open': abs(int(self.api.GetCommData(trcode, rqname, i, "시가"))),
@@ -205,8 +178,27 @@ class KiwoomAPI(QObject):
                         'close': abs(int(self.api.GetCommData(trcode, rqname, i, "현재가"))),
                         'volume': int(self.api.GetCommData(trcode, rqname, i, "거래량"))
                     }
-                    data_list.append(item)
-            self.tr_data = data_list
+                    page_data.append(item)
+                except (ValueError, TypeError) as e:
+                    print(f"\n -> 데이터 파싱 오류 발생. 해당 행을 건너뜁니다. (오류: {e})")
+                    continue
+            self.page_data_received_signal.emit(page_data)
+            if prev_next == "2":
+                time.sleep(0.3)
+                self.start_collecting_minute_data(self.current_code, is_continuous_request=True)
+            else:
+                self.collection_done_signal.emit()
+    
+    def start_collecting_minute_data(self, code, tick_range=3, is_continuous_request=False):
+        self.current_code = code
         
-        if hasattr(self, 'tr_event_loop') and self.tr_event_loop.isRunning():
-            self.tr_event_loop.exit()
+        self.api.SetInputValue("종목코드", code)
+        self.api.SetInputValue("틱범위", str(tick_range))
+        self.api.SetInputValue("수정주가구분", "1")
+        self.api.CommRqData("주식분봉차트조회", "opt10080", 2 if is_continuous_request else 0, "0101")
+
+    def set_request_manager(self, req_manager):
+        self.req_manager = req_manager
+    
+    def get_stock_state(self, code):
+        return self.api.GetMasterStockState(code)
