@@ -8,7 +8,7 @@ def create_features(df):
     df['price_change'] = df['close'].pct_change()
     df['volatility_1h'] = df['price_change'].rolling(window=20).std()
 
-    df['momemtum_2h'] = df['close'].pct_change(periods=40)
+    df['momentum_2h'] = df['close'].pct_change(periods=40)
 
     df['volume_mean_1h'] = df['volume'].rolling(window=20).mean()
     df['volume_mean_5h'] = df['volume'].rolling(window=100).mean()
