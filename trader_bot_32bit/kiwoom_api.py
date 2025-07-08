@@ -1,4 +1,4 @@
-from PyQt5.QtCore import QEventLoop, QDateTime, QObject, pyqtSignal
+from PyQt5.QtCore import QEventLoop, QDateTime, QObject, pyqtSignal, QTimer
 from PyQt5.QAxContainer import QAxWidget
 import time
 
@@ -18,9 +18,11 @@ class KiwoomAPI(QObject):
         self._set_event_handlers()
 
         self.login_event_loop = QEventLoop()
+        self.tr_event_loop = None
 
         self.account_number = None
         self.tr_data = None
+        self.prev_next = "0"
         self.current_code = ""
         self.req_manager = None
 
@@ -34,9 +36,6 @@ class KiwoomAPI(QObject):
         self.api.OnReceiveRealData.connect(self._receive_real_data)
         self.api.OnReceiveChejanData.connect(self._receive_chejan_data)
     
-    def set_request_manager(self, req_manager):
-        self.req_manager = req_manager
-
     def login(self):
         """
         로그인 창을 띄우고, 응답이 올 때까지 대기합니다.
@@ -152,22 +151,36 @@ class KiwoomAPI(QObject):
         return self.api.GetConnectState() #0-미연결, 1-연결
     
     def get_minute_data_page(self, code, tick_range=3, is_continuous_request=False):
-        self.tr_event_loop = QEventLoop()
-        self.current_code = code
+        tr_event_loop = QEventLoop()
+        timer = QTimer()
+        timer.setSingleShot(True)
+        timer.timeout.connect(tr_event_loop.quit)
 
+        self.tr_event_loop = tr_event_loop
+
+        self.tr_data = None 
         self.api.SetInputValue("종목코드", code)
         self.api.SetInputValue("틱범위", str(tick_range))
         self.api.SetInputValue("수정주가구분", "1")
-        self.tr_data = None
+        
+        timer.start(10000) 
         self.api.CommRqData("주식분봉차트조회", "opt10080", 2 if is_continuous_request else 0, "0101")
-        self.tr_event_loop.exec_()
-        return self.tr_data, getattr(self, 'prev_next', '0')
+        tr_event_loop.exec_()
 
+        is_timed_out = not timer.isActive()
+        timer.stop()
+        
+        if is_timed_out:
+            print(f"\n-> [경고] {code} 종목 요청 시간 초과.")
+            return None, "0"
+            
+        return self.tr_data, self.prev_next
 
     def _receive_tr_data(self, screen_no, rqname, trcode, record_name, prev_next, *args):
+        self.prev_next = prev_next
         if rqname == "주식분봉차트조회":
             count = self.api.GetRepeatCnt(trcode, rqname)
-            page_data =[]
+            data_list =[]
             for i in range(count):
                 try:
                     item = {
@@ -178,16 +191,13 @@ class KiwoomAPI(QObject):
                         'close': abs(int(self.api.GetCommData(trcode, rqname, i, "현재가"))),
                         'volume': int(self.api.GetCommData(trcode, rqname, i, "거래량"))
                     }
-                    page_data.append(item)
-                except (ValueError, TypeError) as e:
-                    print(f"\n -> 데이터 파싱 오류 발생. 해당 행을 건너뜁니다. (오류: {e})")
+                    data_list.append(item)
+                except (ValueError, TypeError):
                     continue
-            self.page_data_received_signal.emit(page_data)
-            if prev_next == "2":
-                time.sleep(0.3)
-                self.start_collecting_minute_data(self.current_code, is_continuous_request=True)
-            else:
-                self.collection_done_signal.emit()
+            self.tr_data = data_list
+        if hasattr(self, 'tr_event_loop') and self.tr_event_loop.isRunning():
+            self.tr_event_loop.exit()
+
     
     def start_collecting_minute_data(self, code, tick_range=3, is_continuous_request=False):
         self.current_code = code

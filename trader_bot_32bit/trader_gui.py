@@ -63,7 +63,7 @@ class MainWindow(QMainWindow):
 
         self.monitor_button.setDisabled(True)
         self.ai_button.setDisabled(True)
-        self.update_data_button.setDisabled(True)
+        #self.update_data_button.setDisabled(True)
         
         button_hbox.addWidget(self.start_button)
         button_hbox.addWidget(self.monitor_button)
@@ -123,7 +123,7 @@ class MainWindow(QMainWindow):
         self.update_log("'데이터 최신화'를 시작합니다. 새 터미널 창에서 확인하세요...")
         try:
             py_32bit_path = "C:/Users/pc/AppData/Local/Programs/Python/Python39-32/python.exe"
-            collector_script_path = "C:/program trading system/trader_bot_32bit/collector.py"
+            collector_script_path = "C:/program trading system/trader_bot_32bit/update_data.py"
 
             subprocess.Popen([py_32bit_path, collector_script_path], creationflags=subprocess.CREATE_NEW_CONSOLE)
             self.update_log("데이터 수집기가 백그라운드에서 실행되었습니다.")
