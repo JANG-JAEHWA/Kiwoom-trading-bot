@@ -1,55 +1,56 @@
 import pandas as pd
 import numpy as np
 import os
+from tqdm import tqdm
 
-def create_market_summary():
-    print("---시장 요약 데이터 생성 시작---")
-    data_dir = "data"
-    all_files = [f for f in os.listdir(data_dir) if f.endswith('_daily_data.csv')]
+def create_features(df):
+    """3분봉 데이터 프레임에서 변동성, 모멘텀, 거래량 비율을 이용한 미래계산 함수"""
+    df['price_change'] = df['close'].pct_change()
+    df['volatility_1h'] = df['price_change'].rolling(window=20).std()
 
-    summary_list = []
+    df['momemtum_2h'] = df['close'].pct_change(periods=40)
 
-    for i, file_name in enumerate(all_files):
-        code = file_name.split('-')[0]
+    df['volume_mean_1h'] = df['volume'].rolling(window=20).mean()
+    df['volume_mean_5h'] = df['volume'].rolling(window=100).mean()
+    df['volume_ratio'] = df['volume_mean_1h'] / df['volume_mean_5h']
+
+    df = df.drop(columns=['price_change', 'volume_mean_1h', 'volume_mean_5h'])
+
+    return df
+
+def preprocess_all_data():
+    data_dir = "C:/program trading system/data_3min"
+    all_files = [f for f in os.listdir(data_dir) if f.endswith(".csv")]
+
+    all_features_list = []
+
+    for file_name in tqdm(all_files, desc="시장 데이터 요약중"):
+        code = file_name.split('_')[0]
         file_path = os.path.join(data_dir, file_name)
 
         try:
-            df = pd.read_csv(file_path)
-        except Exception as e:
-            print(f"[{i+1}/{len(all_files)}] {code} 파일 읽기 오류: {e}")
-            continue
-        if len(df) < 30:
-            continue
-        if 'close' not in df.columns:
-            print(f"[{i+1}/{len(all_files)}] {code} 파일에 'close' 칼럼이 없습니다.")
-            continue
+            df = pd.read_csv(file_path, dtype={'date': str})
 
-        df['price_change_ratio'] = df['close'].pct_change()
-        latest_return = df['price_change_ratio'].tail(20).mean()
+            if len(df) < 100:
+                continue
+            
+            df_features = create_features(df)
 
-        latest_volatility = df['price_change_ratio'].tail(20).std()
+            df_features['code'] = code
 
-        ma60 = df['close'].rolling(window=60).mean().iloc[-1]
-        current_price = df['close'].iloc[-1]
-        is_above_ma60 = 1 if current_price > ma60 else 0
+            all_features_list.append(df_features)
 
-        summary =  {
-            'code': code,
-            'latest_return': latest_return,
-            'latest_volatility': latest_volatility,
-            'is_above_ma60': is_above_ma60
-        }
-        summary_list.append(summary)
+        except Exception: continue
+    
+    final_df = pd.concat(all_features_list, ignore_index=True)
+    final_df.dropna(inplace=True)
 
-        if (i+1) % 100 == 0:
-            print(f"[{i+1}/{len(all_files)}] {code} 처리 완료...")
-    summary_df = pd.DataFrame(summary_list)
+    output_path = "C:/program trading system/data/market_summary_features.csv"
+    final_df.to_csv(output_path, index=False, encoding='utf-8-sig')
 
-    summary_path = os.path.join("data", "market_summary.csv")
-    summary_df.to_csv(summary_path, index=False, encoding='utf-8-sig')
+    print(f"\n\n모든 데이터 처리가 완료되었습니다.")
+    print(f"최종 요약 데이터가 '{output_path}'에 저장되었습니다.")
+    print(f"총 {len(final_df)}개의 데이터 포인트가 생성되었습니다.")
 
-    print("\n--- 시장 요약 데이터 생성 완료 ---")
-    print(f"총 {len(summary_df)}개 종목 분석 완료.")
-    print(f"결과가 '{summary_path}'에 저장되었습니다..")
 if __name__ == "__main__":
-    create_market_summary()
+    preprocess_all_data() 
