@@ -45,8 +45,8 @@ def preprocess_all_data():
     final_df = pd.concat(all_features_list, ignore_index=True)
     final_df.dropna(inplace=True)
 
-    output_path = "C:/program trading system/data/market_summary_features.csv"
-    final_df.to_csv(output_path, index=False, encoding='utf-8-sig')
+    output_path = "C:/program trading system/data/market_summary.parquet"
+    final_df.to_parquet(output_path, index=False)
 
     print(f"\n\n모든 데이터 처리가 완료되었습니다.")
     print(f"최종 요약 데이터가 '{output_path}'에 저장되었습니다.")
