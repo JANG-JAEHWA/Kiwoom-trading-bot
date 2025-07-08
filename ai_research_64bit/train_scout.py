@@ -4,24 +4,24 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, precision_score, recall_score
 import os
 
-def train__and_evaluate_scout():
+def train_and_evaluate_scout():
     print("--- AI 스카우터 훈련 및 평가 시작---")
 
     data_path = "C:/program trading system/data/training_data.parquet"
     try:
         df = pd.read_parquet(data_path)
     except FileNotFoundError:
-        print("오류 최종 학습 데이터를 찾을 수 없습니다.")
+        print(f"오류: 최종 학습 데이터를 찾을 수 없습니다: {data_path}")
         return
 
     features = ['volatility_1h', 'momentum_2h', 'volume_ratio']
-    x = df[features]
+    X = df[features]
     y = df['target']
 
     train_size = int(len(df) * 0.8)
-    x_train, x_test = x[:train_size], x[train_size:]
+    X_train, X_test = X[:train_size], X[train_size:]
     y_train, y_test = y[:train_size], y[train_size:]
-    print(f"훈련 데이터: {len(x_train)}개, 테스터 데이터: {len(x_train)}")
+    print(f"훈련 데이터: {len(X_train)}개, 테스터 데이터: {len(X_test)}")
 
     print("LightGBM 모델 훈련 중...")
     lgb_clf = lgb.LGBMClassifier(
@@ -35,17 +35,15 @@ def train__and_evaluate_scout():
         colsample_bytree=0.8,      # 훈련 시, 사용할 힌트(Feature)의 비율
         subsample=0.8              # 훈련 시, 사용할 데이터의 비율
     )
-    lgb_clf.fit(x_train, y_train,
-                eval_set=[(x_test, y_test)],
+    lgb_clf.fit(X_train, y_train,
+                eval_set=[(X_test, y_test)],
                 eval_metric='logloss',
                 callbacks=[lgb.early_stopping(50, verbose=True)])
 
-    predictions = lgb_clf.predict(x_test)
+    predictions = lgb_clf.predict(X_test)
     accuracy = accuracy_score(y_test, predictions)
     precision = precision_score(y_test, predictions)
-    accuracy = accuracy_score(y_test, predictions)
     recall = recall_score(y_test, predictions)
-    print(f"AI 스카우터 정확도: {accuracy * 100:.2f}%")
 
     print("\n--- AI 스카우터 성능 평가 ---")
     print(f"정확도(Accuracy): {accuracy * 100:.2f}%")
@@ -59,7 +57,7 @@ def train__and_evaluate_scout():
     probabilities = lgb_clf.predict_proba(latest_x)[:, 1]
     latest_data['recommend_proba'] = probabilities
 
-    recommended_stocks = latest_data[latest_data['recommend_proba'] >= 0.6].sort_values(by='recommend_proba', ascending=False)
+    recommended_stocks = latest_data[latest_data['recommend_proba'] >= 0.5].sort_values(by='recommend_proba', ascending=False)
     
     if recommended_stocks.empty:
         print("오늘은 추천할 만한 종목을 찾지 못했습니다.")
@@ -68,4 +66,4 @@ def train__and_evaluate_scout():
         print(recommended_stocks[['code', 'recommend_proba']].head(10))
 
 if __name__ == "__main__":
-    train__and_evaluate_scout()
+    train_and_evaluate_scout()
