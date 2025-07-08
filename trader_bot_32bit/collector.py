@@ -1,8 +1,8 @@
 import os
+import sys
 import time
 from kiwoom_api import KiwoomAPI
 from PyQt5.QtWidgets import QApplication
-import sys
 import pandas as pd
 from datetime import datetime
 from PyQt5.QtCore import QEventLoop, QTimer
@@ -43,7 +43,8 @@ class Collector:
         if self.event_loop and self.event_loop.isRunning(): self.event_loop.exit()
         
     def run(self):
-        self.kiwoom.login()
+        if self.kiwoom.get_connect_state() == 0:
+            self.kiwoom.login()
 
         data_dir = "C:/program trading system/data_3min"
         if not os.path.exists(data_dir):
@@ -57,13 +58,14 @@ class Collector:
             
             self.current_file_path = os.path.join(data_dir, f"{code}_3min_data.csv")
             self.is_file_new = not os.path.exists(self.current_file_path)
-            if not self.is_file_new:
-                print("-> 파일이 이미 존재하므로 건너뜁니다.")
-                continue
 
             state = self.kiwoom.get_stock_state(code)
             if any(keyword in state for keyword in ["관리종목", "거래정지", "정리매매"]):
                 print(f"-> '{state}' 상태이므로 수집에서 제외합니다.")
+                continue
+            if not self.is_file_new:
+                print(f"-> 기존 파일 발견. 최신 데이터로 업데이트합니다...")
+                print("-> 파일이 이미 존재하므로 건너 뜁니다.")
                 continue
 
             self.collection_timed_out = True

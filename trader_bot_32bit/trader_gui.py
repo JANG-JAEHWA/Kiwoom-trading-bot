@@ -1,11 +1,12 @@
 import sys
+import os
 import subprocess
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QWidget,
                              QPushButton, QTextEdit, QLabel, QLineEdit, QHBoxLayout)
 from PyQt5.QtCore import  QThread, pyqtSignal, QTimer, QDateTime
 from kiwoom_api import KiwoomAPI
 import pandas as pd
-import os
+
 
 class KiwoomWorker(QThread):
     def __init__(self, kiwoom_instance, task, **kwargs):
@@ -21,10 +22,7 @@ class KiwoomWorker(QThread):
         elif self.task == "monitor":
             code = self.kwargs.get("code")
             self.kiwoom.subscribe_realtime_data("0101", code, "20;10;15", "0")
-    
-    def set_task(self, task, **kwargs):
-        self.task = task
-        self.kwargs = kwargs                     
+                 
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -32,7 +30,6 @@ class MainWindow(QMainWindow):
         self.kiwoom = KiwoomAPI()
         self.worker = None
         self.ai_process = None
-
         self.initUI()
 
         self.kiwoom.log_signal.connect(self.update_log)
@@ -45,38 +42,34 @@ class MainWindow(QMainWindow):
 
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-
         main_vbox = QVBoxLayout()
         central_widget.setLayout(main_vbox)
 
         top_hbox = QHBoxLayout()
-        
         self.account_label = QLabel('계좌번호: 미연결')
         self.stock_code_label = QLabel('종목코드:')
         self.stock_code_input = QLineEdit('005930')
-
         top_hbox.addWidget(self.account_label)
         top_hbox.addWidget(self.stock_code_label)
         top_hbox.addWidget(self.stock_code_input)
 
         button_hbox = QHBoxLayout()
-
         self.start_button = QPushButton('1. 키움증권 로그인')
         self.monitor_button = QPushButton('2. 실시간 모니터링 시작')
         self.ai_button = QPushButton('3. AI 컨트롤러 시작')
+        self.update_data_button = QPushButton('데이터 최신화')
         self.exit_button = QPushButton('프로그램 종료')
         self.exit_button.clicked.connect(self.close)
 
         self.monitor_button.setDisabled(True)
         self.ai_button.setDisabled(True)
+        self.update_data_button.setDisabled(True)
         
         button_hbox.addWidget(self.start_button)
         button_hbox.addWidget(self.monitor_button)
+        button_hbox.addWidget(self.update_data_button)
         button_hbox.addWidget(self.ai_button)
         button_hbox.addWidget(self.exit_button)
-
-
-        
 
         self.log_box = QTextEdit()
         self.log_box.setReadOnly(True)
@@ -92,10 +85,10 @@ class MainWindow(QMainWindow):
         self.timer.start(1000)
         self.timer.timeout.connect(self.update_time)
 
-        self.stock_code_label = QLabel('모니터링할 종목 코드:')
 
         self.start_button.clicked.connect(self.start_login)
         self.monitor_button.clicked.connect(self.start_monitoring)
+        self.update_data_button.clicked.connect(self.start_data_update)
         self.ai_button.clicked.connect(self.start_ai_controller)
 
         self.show()
@@ -125,18 +118,21 @@ class MainWindow(QMainWindow):
             self.ai_button.setDisabled(True)
         except Exception as e:
             self.update_log(f"AI 컨트롤라 실행 실패: {e}")
+
+    def start_data_update(self):
+        self.update_log("'데이터 최신화'를 시작합니다. 새 터미널 창에서 확인하세요...")
+        try:
+            py_32bit_path = "C:/Users/pc/AppData/Local/Programs/Python/Python39-32/python.exe"
+            collector_script_path = "C:/program trading system/trader_bot_32bit/collector.py"
+
+            subprocess.Popen([py_32bit_path, collector_script_path], creationflags=subprocess.CREATE_NEW_CONSOLE)
+            self.update_log("데이터 수집기가 백그라운드에서 실행되었습니다.")
+        except Exception as e:
+            self.update_log(f"데이터 수집기 실행 실패: {e}")
             
-    
     def update_time(self):
         currentTime = QDateTime.currentDateTime().toString('yyyy-MM-dd hh:mm:ss')
         self.statusBar.showMessage(f"현재시간: {currentTime} | 상태: 준비 중")
-    
-    def on_start_button_clicked(self):
-        if self.kiwoom.get_connect_state() == 0:
-            self.worker = KiwoomWorker(self.kiwoom, "login")
-            self.worker.start()
-            self.start_button.setDisabled(True)
-        
     
     def update_log(self, message):
         self.log_box.append(str(message))
@@ -147,6 +143,7 @@ class MainWindow(QMainWindow):
         self.start_button.setText("로그인 완료")
         self.monitor_button.setDisabled(False)
         self.ai_button.setDisabled(False)
+        self.update_data_button.setDisabled(False)
 
         self.account_label.setText(f"계좌번호: {self.kiwoom.account_number}")
         self.statusBar.showMessage(f"현재시간: {QDateTime.currentDateTime().toString('yyyy-MM-dd hh:mm:ss')} | 상태: 로그인 완료")
