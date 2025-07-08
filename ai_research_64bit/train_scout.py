@@ -1,54 +1,71 @@
 import pandas as pd
-from sklearn.ensemble import RandomForestClassifier
+import lightgbm as lgb
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, precision_score, recall_score
 import os
-import joblib
 
-def run_scout_and_get_recommendations():
-    print("--- AI 스카우터 훈련 시작---")
+def train__and_evaluate_scout():
+    print("--- AI 스카우터 훈련 및 평가 시작---")
 
-    summary_path = os.path.join("data", "market_summary.csv")
+    data_path = "C:/program trading system/data/training_data.parquet"
     try:
-        df = pd.read_csv(summary_path)
-    except:
-        print("오류 요약 데이터를 찾을 수 없습니다.")
+        df = pd.read_parquet(data_path)
+    except FileNotFoundError:
+        print("오류 최종 학습 데이터를 찾을 수 없습니다.")
         return
-    df['target'] = ((df['latest_return'] > 0.005) & (df['is_above_ma60'] == 1)).astype(int)
 
-    df = df.dropna()
-
-    features = ['latest_return', 'latest_volatility', 'is_above_ma60']
+    features = ['volatility_1h', 'momentum_2h', 'volume_ratio']
     x = df[features]
     y = df['target']
 
-    if len(x) == 0 or len(y.unique()) < 2:
-        print("오류: 훈련할 데이터가 부족하거나, 한 종류의 정답만 존재")
-        return
+    train_size = int(len(df) * 0.8)
+    x_train, x_test = x[:train_size], x[train_size:]
+    y_train, y_test = y[:train_size], y[train_size:]
+    print(f"훈련 데이터: {len(x_train)}개, 테스터 데이터: {len(x_train)}")
 
-    x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=42, stratify=y)
+    print("LightGBM 모델 훈련 중...")
+    lgb_clf = lgb.LGBMClassifier(
+        device= 'gpu',
+        n_estimators=1000,         # 더 많은 전문가(트리)에게 물어봅니다.
+        learning_rate=0.05,        # 더 꼼꼼하게 학습합니다.
+        num_leaves=31,             # 트리의 복잡도
+        max_depth=-1,              # 트리의 최대 깊이 (제한 없음)
+        random_state=42,
+        n_jobs=-1,                 # 사용 가능한 모든 CPU 코어 사용
+        colsample_bytree=0.8,      # 훈련 시, 사용할 힌트(Feature)의 비율
+        subsample=0.8              # 훈련 시, 사용할 데이터의 비율
+    )
+    lgb_clf.fit(x_train, y_train,
+                eval_set=[(x_test, y_test)],
+                eval_metric='logloss',
+                callbacks=[lgb.early_stopping(50, verbose=True)])
 
-    model = RandomForestClassifier(n_estimators=100, random_state=42)
-    model.fit(x_train, y_train)
-
-    accuracy = model.score(x_test, y_test)
+    predictions = lgb_clf.predict(x_test)
+    accuracy = accuracy_score(y_test, predictions)
+    precision = precision_score(y_test, predictions)
+    accuracy = accuracy_score(y_test, predictions)
+    recall = recall_score(y_test, predictions)
     print(f"AI 스카우터 정확도: {accuracy * 100:.2f}%")
 
-    df['prediction'] = model.predict(x)
-    recommended_stocks = df[df['prediction'] == 1]
+    print("\n--- AI 스카우터 성능 평가 ---")
+    print(f"정확도(Accuracy): {accuracy * 100:.2f}%")
+    print(f"정밀도(Precision): {precision * 100:.2f}%  (AI가 '상승' 예측한 것 중, 진짜 상승한 비율)")
+    print(f"재현율 (Recall): {recall * 100:.2f}%   (실제 상승한 것 중, AI가 '상승' 예측해낸 비율)")
 
-    print("\n--- AI 스카우터 최종 추천 종목 ---")
+    print("\n--- AI 스카우터의 오늘의 추천 종목 ---")
+    latest_data = df.loc[df.groupby('code')['date'].idxmax()]
+    latest_x = latest_data[features]
+
+    probabilities = lgb_clf.predict_proba(latest_x)[:, 1]
+    latest_data['recommend_proba'] = probabilities
+
+    recommended_stocks = latest_data[latest_data['recommend_proba'] >= 0.6].sort_values(by='recommend_proba', ascending=False)
+    
     if recommended_stocks.empty:
-        print("추천할 만한 종목을 찾지 못했습니다.")
+        print("오늘은 추천할 만한 종목을 찾지 못했습니다.")
         return []
     else:
-        print(recommended_stocks[['code', 'latest_return', 'latest_volatility']])
-        return recommended_stocks['code'].tolist()
-
-    if not os.path.exists('models'):
-        os.makedirs('models')
-    model_path = os.path.join('models', 'scout_model_v1.joblib')
-    joblib.dump(model, model_path)
-    print("훈련된 스카우터 모델을 저장했습니다.")
+        print(recommended_stocks[['code', 'recommend_proba']].head(10))
 
 if __name__ == "__main__":
-    run_scout_and_get_recommendations()
+    train__and_evaluate_scout()

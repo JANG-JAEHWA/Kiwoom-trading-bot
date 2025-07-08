@@ -24,6 +24,7 @@ def run_labeling():
     print("종목별로 그룹화하여 정답을 계산합니다. (과정이 오래 걸릴 수 있음...)")
 
     labeled_df = df.groupby('code').progress_apply(create_labels)
+    labeled_df = labeled_df.reset_index(drop=True)
 
     labeled_df.dropna(inplace=True)
 
