@@ -40,6 +40,14 @@ class MainWindow(QMainWindow):
         self.setWindowTitle('AI 자동매매 시스템 v2.0 - 통합 관제')
         self.setGeometry(300, 300, 600, 500) #x, y, 너비, 높이
 
+        try:
+            with open("C:/program trading system/watchlist.txt") as f:
+                first_stock = f.readline().strip()
+            if not first_stock:
+                first_stock = "005930"
+        except FileNotFoundError:
+            first_stock = "005930"
+
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_vbox = QVBoxLayout()
@@ -48,7 +56,7 @@ class MainWindow(QMainWindow):
         top_hbox = QHBoxLayout()
         self.account_label = QLabel('계좌번호: 미연결')
         self.stock_code_label = QLabel('종목코드:')
-        self.stock_code_input = QLineEdit('005930')
+        self.stock_code_input = QLineEdit(first_stock)
         top_hbox.addWidget(self.account_label)
         top_hbox.addWidget(self.stock_code_label)
         top_hbox.addWidget(self.stock_code_input)

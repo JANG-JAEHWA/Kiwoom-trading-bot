@@ -61,9 +61,15 @@ def train_and_evaluate_scout():
     
     if recommended_stocks.empty:
         print("오늘은 추천할 만한 종목을 찾지 못했습니다.")
-        return []
+        with open("C:/program trading system/watchlist.txt", "w") as f:
+            f.write("")
     else:
         print(recommended_stocks[['code', 'recommend_proba']].head(10))
+        recommended_codes = recommended_stocks['code'].tolist()
+        with open("C:/program trading system/watchlist.txt", "w") as f:
+            for code in recommended_codes:
+                f.write(f"{code}\n")
+        print("\n'watchlist.txt' 파일에 추천 종목 리스트를 저장했습니다.")
 
 if __name__ == "__main__":
     train_and_evaluate_scout()
