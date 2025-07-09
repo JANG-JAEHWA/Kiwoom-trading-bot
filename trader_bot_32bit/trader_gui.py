@@ -30,6 +30,10 @@ class MainWindow(QMainWindow):
         self.kiwoom = KiwoomAPI()
         self.worker = None
         self.ai_process = None
+
+        self.signal_check_timer = QTimer(self)
+        self.signal_check_timer.timeout.connect(self.check_for_signals)
+
         self.initUI()
 
         self.kiwoom.log_signal.connect(self.update_log)
@@ -37,7 +41,7 @@ class MainWindow(QMainWindow):
         self.kiwoom.candle_completed_signal.connect(self.on_candle_completed)
 
     def initUI(self):
-        self.setWindowTitle('AI 자동매매 시스템 v2.0 - 통합 관제')
+        self.setWindowTitle('AI 자동매매 시스템 v3.0 - 최종 관제탑')
         self.setGeometry(300, 300, 600, 500) #x, y, 너비, 높이
 
         try:
@@ -71,7 +75,7 @@ class MainWindow(QMainWindow):
 
         self.monitor_button.setDisabled(True)
         self.ai_button.setDisabled(True)
-        #self.update_data_button.setDisabled(True)
+        self.update_data_button.setDisabled(True)
         
         button_hbox.addWidget(self.start_button)
         button_hbox.addWidget(self.monitor_button)
@@ -155,19 +159,52 @@ class MainWindow(QMainWindow):
 
         self.account_label.setText(f"계좌번호: {self.kiwoom.account_number}")
         self.statusBar.showMessage(f"현재시간: {QDateTime.currentDateTime().toString('yyyy-MM-dd hh:mm:ss')} | 상태: 로그인 완료")
+
+        self.signal_check_timer.start(5000)
+        self.update_log("주문 신호 감지를 시작합니다...")
+
+    def check_for_signals(self):
+        signal_dir = "C:/program trading system/signals"
+        if not os.path.exists(signal_dir):
+            return
+        for signal_file in os.listdir(signal_dir):
+            if signal_file.endswith(".txt"):
+                file_path = os.path.join(signal_dir, signal_file)
+                try:
+                    with open(file_path, 'r') as f:
+                        content = f.read().strip()
+                    parts = content.split('r')
+                    if len(parts) == 3:
+                        signal, code, qty_str = parts
+                        qty = int(qty_str)
+
+                        self.update_log(f"!!! 주문 신호 수신: {code} 종목, {qty}주 {signal} 주문 실행!!!")
+                        order_type = 1 if signal == "BUY" else 2
+                        self.kiwoom.send_order("AIBotOrder", "0101", self.kiwoom.account_number, order_type, code, qty, 0, "03")
+
+                        os.remove(file_path)
+                except Exception as e:
+                    self.update_log(f"신호 파일 처리 중 오류 발생: {e}")
+                    os.remove(file_path)
+        
+
     
     def on_candle_completed(self, candle_data):
         self.update_log(f"[3분봉 완성] {candle_data}")
-        try:
-            live_data_path = "../data/live_data.csv"
-            df = pd.DataFrame([candle_data])
+        code = candle_data['code']
+        live_data_dir = "C:/program trading system/data/live_data"
+        if not os.path.exists(live_data_dir): os.makedirs(live_data_dir)
 
+        live_data_path = os.path.join(live_data_dir, f"live{code}.csv")
+
+        df = pd.DataFrame([candle_data])
+        try:
             if not os.path.exists(live_data_path):
                 df.to_csv(live_data_path, index=False, encoding='utf-8-sig')
             else:
                 df.to_csv(live_data_path, mode='a', header=False, index=False, encoding='utf-8-sig')
         except Exception as e:
-            self.update_log(f"파일 저장 중 오류 발생: {e}")
+            self.update_log(f"[{code}] 실시간 데이터 저장 오류: {e}")
 
         
     def closeEvent(self, event):

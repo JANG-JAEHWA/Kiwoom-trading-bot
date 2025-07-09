@@ -1,26 +1,47 @@
-data/
-data_3min/
-models/
-
-*.txt
-realtime_data.csv
-
-config.py
-
-venv/
-.venv/
-
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
 
-.idea/
+# Environments
+.venv/
+venv/
+env/
+
+# IDE and Editor Folders
 .vscode/
+.idea/
+.project/
+.settings/
 
-logs/
+# OS-generated files
+.DS_Store
+Thumbs.db
+
+# --- [우리 프로젝트 맞춤 설정] ---
+
+# 민감한 설정 파일
+config.py
+
+# AI 모델 파일 (바이너리)
+models/
+*.joblib
+*.pkl
+*.h5
+
+# 데이터 파일 및 폴더 (Git으로 관리하지 않음)
+data/
+data_3min/
+live_data/
+live_data.csv
+market_summary.parquet
+market_summary_features.csv
+training_data.parquet
+strategy_training_data.parquet
+watchlist.txt
+signal.txt
 *.log
 
-*.pkl
-*.joblib
-*.h5
-*.keras
+# Jupyter Notebook Checkpoints
 .ipynb_checkpoints/

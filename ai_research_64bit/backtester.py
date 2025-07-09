@@ -1,57 +1,90 @@
 import pandas as pd
+from tqdm import tqdm
 from strategy import ai_strategy
 import os
 
-def run_backtest(data_path, initial_capital=10000000, fee_tax_rate=0.002):
-    try:
-        df = pd.read_csv(data_path)
-        df['date'] = pd.to_datetime(df['date'].astype(str))
-        df.set_index('date', inplace=True)
-    except FileNotFoundError:
-        print(f"데이터 파일을 찾을 수 없습니다: {data_path}")
-        return
+def run_backtest(df, initial_capital=10000000):
+    capital = initial_capital
+    fee_rate = 0.003
+    profit_target = 0.03
+    stop_loss_target = -0.015
 
-    cash = initial_capital
-    shares = 0
-    trade_amount = initial_capital * 0.1
-    portfolio_value = initial_capital
+    position = 0
+    buy_price = 0
+    trades = []
 
-    print(f"백테스팅 시작... 초기 자본: {initial_capital:,.0f}원 | 거래 단위: {trade_amount:,.0f}원")
+    for i in tqdm(range(100, len(df)), desc="백테스팅 진행 중"):
+        current_price = df.iloc[i]['close']
+        current_date = df.iloc[i]['date']
 
-    for i in range(20, len(df)):
-        current_data_slice = df.iloc[:i+1]
-        current_date = current_data_slice.index[-1]
-        current_price = current_data_slice['close'].iloc[-1]
+        if position > 0:
+            if current_price >= buy_price * (1 + profit_target):
+                sell_value = position * current_price
+                capital += sell_value * (1 - fee_rate)
+                trades.append({'date': current_date, 'type': 'TAKE_PROFIT', 'price': current_price, 'qty': position})
+                position = 0
+                buy_price = 0
+                continue
+            elif current_price <= buy_price * (1 + stop_loss_target):
+                sell_value = position * current_price
+                capital += sell_value * (1 - fee_rate)
+                trades.append({'date': current_date, 'type': 'STOP_LOSS', 'price': current_price, 'qty': position})
+                position = 0
+                buy_price = 0
+                continue
+        else:
+            daily_data = df.iloc[:i+1]
+            signal = ai_strategy(daily_data)
+            
+            if signal == "BUY":
+                buy_value = capital
+                buy_qty = int(buy_value / current_price)
 
-        signal = ai_strategy(current_data_slice)
-
-        if signal == "BUY" and cash > trade_amount:
-            if shares == 0:
-                buy_qty = trade_amount // (current_price *(1 + fee_tax_rate))
                 if buy_qty > 0:
                     cost = buy_qty * current_price
-                    cash -= cost * (1 + fee_tax_rate)
-                    shares += buy_qty
-                    print(f"{current_date} | [매수] {buy_qty}주 @ {current_price:,.0f}원 | 총 현금: {cash:,.0f}원")
-
-        elif signal == "SELL" and shares > 0:
-            revenue = shares * current_price
-            cash += revenue * (1 - fee_tax_rate)
-            print(f"{current_date} | [매도] {shares}주 @ {current_price:,.0f}원 | 총 현금: {cash:,.0f}원")
-            shares = 0
-
-    final_portfolio_value = cash + (shares * df['close'].iloc[-1])
-    profit = final_portfolio_value - initial_capital
+                    capital -= cost * (1 + fee_rate)
+                    position = buy_qty
+                    buy_price = current_price
+                    trades.append({'date': current_date, 'type': 'BUY', 'price': current_price, 'qty': buy_qty})
+    if position > 0:
+        last_price = df.iloc[-1]['close']
+        capital += position * last_price * (1 - fee_rate)
+        trades.append({'date': df.iloc[-1]['date'], 'type': 'EXIT', 'price': last_price, 'qty': position})
+    final_balance = capital
+    profit = final_balance - initial_capital
     profit_rate = (profit / initial_capital) * 100
 
+    return final_balance, profit, profit_rate, pd.DataFrame(trades)
+
+def main():
+    try:
+        with open("C:/program trading system/watchlist.txt", "r") as f:
+            stock_code_list = f.readlines()
+            stock_code = stock_code_list[0].strip() # 몇째 줄 읽기
+            if not stock_code:
+                print("오류: watchlist.txt 파일이 비어있습니다.")
+                return
+    except FileNotFoundError:
+        print("오류: watchlist.txt 파일을 찾을 수 없습니다. 스카우터를 먼저 실행해주세요.")
+        return
+    data_path = f"C:/program trading system/data_3min/{stock_code}_3min_data.csv"
+    try:
+        df = pd.read_csv(data_path, dtype={'date': str})
+    except FileNotFoundError:
+        print(f"오류: {stock_code}의 데이터 파일을 찾을 수 없습니다.")
+        return
+    print(f"--- [{stock_code}] 종목 AI 전략 백테스팅 시작 ---")
+    final_balance, profit, profit_rate, trade_df = run_backtest(df)
+
     print("\n--- 백테스팅 결과 ---")
-    print(f"최종 자산: {final_portfolio_value:,.0f}원")
+    print(f"최종 자산: {final_balance:,.0f}원")
     print(f"총 손익: {profit:,.0f}원")
     print(f"수익률: {profit_rate:.2f}%")
-    return profit_rate
+    print(f"총 거래 횟수: {len(trade_df)}")
+    print("\n--- 거래 내역 ---")
+    print(trade_df.to_string())
 
 if __name__ == "__main__":
-    csv_path = "data/005930_daily_data.csv"
-    run_backtest(csv_path)
+    main()
                 
                 
