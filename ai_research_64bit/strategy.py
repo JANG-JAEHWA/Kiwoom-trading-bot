@@ -2,38 +2,7 @@ import pandas as pd
 import joblib
 import os
 
-def simple_ma_strategy(daily_data):
-    """
-    5일 이평선이 20일 이평선을 돌파시 매수 전략
-    20일 이평선이 5일 이평선을 돌파시 매도 전략
-    """
-    if not isinstance(daily_data, pd.DataFrame):
-        df = pd.DataFrame(daily_data)
-    else:
-        df = daily_data.copy()
-        
-    if len(df) < 20:
-        return "HOLD"
-
-
-    df['MA5'] = df['close'].rolling(window=5).mean()
-    df['MA20'] = df['close'].rolling(window=20).mean()
-
-    prev_ma5 = df['MA5'].iloc[-2]
-    latest_ma5 = df['MA5'].iloc[-1]
-    prev_ma20 = df['MA20'].iloc[-2]
-    latest_ma20 = df['MA20'].iloc[-1]
-
-    if prev_ma5 <= prev_ma20 and latest_ma5 > latest_ma20:
-        print(">>> 골든크로스 발생! 매수 신호! <<<")
-        return "BUY"
-    if prev_ma5 >= prev_ma20 and latest_ma5 < latest_ma20:
-        print(">>> 데드크로스 발생! 매도 신호! <<<")
-        return "SELL"
-
-    return "HOLD"
-
-def ai_strategy(daily_data, model_path='models/ai_model_v1.joblib'):
+def ai_strategy(daily_data, model_path='C:/program trading system/models/strategist_model_v1.joblib'):
     """
     ai가 판단하여 매수,매도 신호 반환
     """
@@ -50,7 +19,7 @@ def ai_strategy(daily_data, model_path='models/ai_model_v1.joblib'):
     if features_df.empty:
         return "HOLD"
 
-    features = ['MA5', 'MA20', 'price_change_ratio', 'volume', 'RSI', 'bollinger_upper', 'bollinger_lower']
+    features = ['volatility_1h', 'momentum_2h', 'volume_ratio']
     latest_features = features_df[features].iloc[[-1]]
 
     prediction = model.predict(latest_features)
@@ -64,20 +33,16 @@ def ai_strategy(daily_data, model_path='models/ai_model_v1.joblib'):
 
 def generate_features(df):
     df_new = df.copy()
-    df_new['MA5'] = df_new['close'].rolling(window=5).mean()
-    df_new['MA20'] = df_new['close'].rolling(window=20).mean()
-    df_new['price_change_ratio'] = df_new['close'].pct_change()
+    df_new['price_change'] = df_new['close'].pct_change()
+    df_new['volatility_1h'] = df_new['price_change'].rolling(window=20).std()
 
-    delta = df_new['close'].diff()
-    gain = delta.where(delta > 0, 0)
-    loss = -delta.where(delta < 0, 0)
-    avg_gain = gain.ewm(com=13, min_periods=14).mean()
-    avg_loss = loss.ewm(com=13, min_periods=14).mean()
-    rs = avg_gain / avg_loss
-    df_new['RSI'] = 100 - (100 / (1 + rs))
+    df_new['momentum_2h'] = df_new['close'].pct_change(periods=40)
 
-    df_new['bollinger_upper'] = df_new['MA20'] + (df_new['close'].rolling(window=20).std() * 2)
-    df_new['bollinger_lower'] = df_new['MA20'] - (df_new['close'].rolling(window=20).std() * 2)
+    df_new['volume_mean_1h'] = df_new['volume'].rolling(window=20).mean()
+    df_new['volume_mean_5h'] = df_new['volume'].rolling(window=100).mean()
+    df_new['volume_ratio'] = df_new['volume_mean_1h'] / df_new['volume_mean_5h']
+
+    df_new = df_new.drop(columns=['price_change', 'volume_mean_1h', 'volume_mean_5h'])
 
     return df_new.dropna()
     
