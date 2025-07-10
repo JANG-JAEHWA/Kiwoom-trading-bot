@@ -15,7 +15,7 @@ def train_and_evaluate_strategist():
         print(f"오류: 최종 학습 데이터를 찾을 수 없습니다: {data_path}")
         return
     
-    features = ['volatility_1h', 'momentum_2h', 'volume_ratio']
+    features = ['volatility_1h', 'momentum_2h', 'volume_ratio', 'atr', 'roc']
     X = df[features]
     y = df['target']
 
@@ -28,8 +28,7 @@ def train_and_evaluate_strategist():
     print("LightGBM 모델 훈련 중...")
     lgb_clf = lgb.LGBMClassifier(
         device= 'gpu',
-        random_state=42,
-        n_jobs=-1,                 # 사용 가능한 모든 CPU 코어 사용
+        random_state=42
     )
     lgb_clf.fit(X_train, y_train)
 

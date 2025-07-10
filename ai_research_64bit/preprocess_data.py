@@ -1,24 +1,9 @@
 import pandas as pd
-import numpy as np
+from feature_engineering import generate_features
 import os
 from tqdm import tqdm
 
 MIN_AVG_TRADING_VALUE = 1_000_000_000
-
-def create_features(df):
-    """3분봉 데이터 프레임에서 변동성, 모멘텀, 거래량 비율을 이용한 미래계산 함수"""
-    df['price_change'] = df['close'].pct_change()
-    df['volatility_1h'] = df['price_change'].rolling(window=20).std()
-
-    df['momentum_2h'] = df['close'].pct_change(periods=40)
-
-    df['volume_mean_1h'] = df['volume'].rolling(window=20).mean()
-    df['volume_mean_5h'] = df['volume'].rolling(window=100).mean()
-    df['volume_ratio'] = df['volume_mean_1h'] / df['volume_mean_5h']
-
-    df = df.drop(columns=['price_change', 'volume_mean_1h', 'volume_mean_5h'])
-
-    return df
 
 def preprocess_all_data():
     data_dir = "C:/program trading system/data_3min"
@@ -33,7 +18,7 @@ def preprocess_all_data():
         try:
             df = pd.read_csv(file_path, dtype={'date': str})
 
-            if len(df) < 100:
+            if len(df) < 101:
                 continue
             df['trading_value'] = df['close'] * df['volume']
             df['day'] = df['date'].str[:8]
@@ -42,7 +27,7 @@ def preprocess_all_data():
             if avg_trading_value < MIN_AVG_TRADING_VALUE:
                 continue
             
-            df_features = create_features(df)
+            df_features = generate_features(df.drop(columns=['trading_value', 'day']))
 
             df_features['code'] = code
 
