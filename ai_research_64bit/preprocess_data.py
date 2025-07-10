@@ -3,6 +3,8 @@ import numpy as np
 import os
 from tqdm import tqdm
 
+MIN_AVG_TRADING_VALUE = 1_000_000_000
+
 def create_features(df):
     """3분봉 데이터 프레임에서 변동성, 모멘텀, 거래량 비율을 이용한 미래계산 함수"""
     df['price_change'] = df['close'].pct_change()
@@ -32,6 +34,12 @@ def preprocess_all_data():
             df = pd.read_csv(file_path, dtype={'date': str})
 
             if len(df) < 100:
+                continue
+            df['trading_value'] = df['close'] * df['volume']
+            df['day'] = df['date'].str[:8]
+            avg_trading_value = df.groupby('day')['trading_value'].sum().mean()
+
+            if avg_trading_value < MIN_AVG_TRADING_VALUE:
                 continue
             
             df_features = create_features(df)

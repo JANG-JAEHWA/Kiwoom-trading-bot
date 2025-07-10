@@ -5,7 +5,7 @@ from tqdm import tqdm
 tqdm.pandas()
 
 def create_strategy_labels(df_group):
-    PROFIT_TARGET = 0.03
+    PROFIT_TARGET = 0.033
     STOP_LOSS_TARGET = -0.015
     HOLDING_PERIOD = 40
 
