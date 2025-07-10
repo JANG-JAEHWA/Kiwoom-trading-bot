@@ -10,7 +10,7 @@ def create_labels(df_group):
 
     feature_returns = (feature_highs -df_group['close']) / df_group['close']
 
-    df_group['target'] = (feature_returns >= 0.03).astype(int)
+    df_group['target'] = (feature_returns >= 0.033).astype(int)
 
     return df_group
 

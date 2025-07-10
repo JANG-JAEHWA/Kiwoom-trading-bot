@@ -20,8 +20,9 @@ class KiwoomWorker(QThread):
         if self.task == "login":
             self.kiwoom.login()
         elif self.task == "monitor":
-            code = self.kwargs.get("code")
-            self.kiwoom.subscribe_realtime_data("0101", code, "20;10;15", "0")
+            codes_str = self.kwargs.get("codes_str")
+            self.kiwoom.subscribe_realtime_data("0101", codes_str)
+            self.exec_()
                  
 
 class MainWindow(QMainWindow):
@@ -111,12 +112,12 @@ class MainWindow(QMainWindow):
         self.start_button.setDisabled(True)
 
     def start_monitoring(self):
-        code = self.stock_code_input.text()
-        self.update_log(f"{code} 종목 실시간 모니터링을 시작합니다.")
-        self.worker = KiwoomWorker(self.kiwoom, "monitor", code=code)
-        self.worker.start()
-        self.start_button.setText("모니터링 중...")
-        self.start_button.setDisabled(True)
+        try:
+            with open("C:/program trading system/watchlist.txt", "r") as f: codes = [line.strip() for line in f.readlines() if line.strip()]
+            if not codes: self.update_log("오류: watchlist.txt가 비어있습니다."); return
+            worker = KiwoomWorker(self.kiwoom, "monitor", codes_str=";".join(codes)); worker.start(); self.worker = worker
+            self.monitor_button.setDisabled(True); self.monitor_button.setText("모니터링 중...")
+        except Exception as e: self.update_log(f"모니터링 시작 오류: {e}")
 
     def start_ai_controller(self):
         self.update_log("AI 엔진 연구소를 가동합니다...")
@@ -143,8 +144,30 @@ class MainWindow(QMainWindow):
             self.update_log(f"데이터 수집기 실행 실패: {e}")
             
     def update_time(self):
-        currentTime = QDateTime.currentDateTime().toString('yyyy-MM-dd hh:mm:ss')
-        self.statusBar.showMessage(f"현재시간: {currentTime} | 상태: 준비 중")
+        """
+        [수정] 매초마다 현재 시간과 함께, 다음 3분봉까지 남은 시간을 계산하여 상태바에 표시합니다.
+        """
+        now = QDateTime.currentDateTime()
+        
+        # 다음 3분봉 시간 계산
+        current_minute = now.time().minute()
+        minutes_to_next_window = 3 - (current_minute % 3)
+        seconds_to_next_window = 60 - now.time().second()
+        
+        # 실제 남은 시간 계산 (분, 초)
+        remaining_minutes = minutes_to_next_window - 1
+        remaining_seconds = seconds_to_next_window
+        
+        if seconds_to_next_window == 60:
+            remaining_minutes += 1
+            remaining_seconds = 0
+            
+        # 상태 메시지 설정
+        status_message = f"현재시간: {now.toString('yyyy-MM-dd hh:mm:ss')}"
+        if self.monitor_button.isEnabled() == False: # 모니터링이 시작되었을 때만 진행도 표시
+            status_message += f" | 다음 캔들까지: {remaining_minutes}분 {remaining_seconds}초"
+            
+        self.statusBar.showMessage(status_message)
     
     def update_log(self, message):
         self.log_box.append(str(message))
@@ -190,21 +213,18 @@ class MainWindow(QMainWindow):
 
     
     def on_candle_completed(self, candle_data):
-        self.update_log(f"[3분봉 완성] {candle_data}")
-        code = candle_data['code']
-        live_data_dir = "C:/program trading system/data/live_data"
-        if not os.path.exists(live_data_dir): os.makedirs(live_data_dir)
-
-        live_data_path = os.path.join(live_data_dir, f"live{code}.csv")
-
-        df = pd.DataFrame([candle_data])
+        code = candle_data.get('code')
+        if not code: return
         try:
+            live_data_dir = "C:/program trading system/data/live_data"
+            if not os.path.exists(live_data_dir): os.makedirs(live_data_dir)
+            live_data_path = os.path.join(live_data_dir, f"live_{code}.csv")
+            df = pd.DataFrame([candle_data])
             if not os.path.exists(live_data_path):
                 df.to_csv(live_data_path, index=False, encoding='utf-8-sig')
             else:
                 df.to_csv(live_data_path, mode='a', header=False, index=False, encoding='utf-8-sig')
-        except Exception as e:
-            self.update_log(f"[{code}] 실시간 데이터 저장 오류: {e}")
+        except Exception as e: self.update_log(f"[{code}] 캔들 저장 오류: {e}")
 
         
     def closeEvent(self, event):

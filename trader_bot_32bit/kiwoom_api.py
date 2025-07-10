@@ -26,7 +26,7 @@ class KiwoomAPI(QObject):
         self.current_code = ""
         self.req_manager = None
 
-        self.current_candle = {}
+        self.current_candles = {}
         self.current_window_start_time = None
 
     def _set_event_handlers(self):
@@ -58,48 +58,52 @@ class KiwoomAPI(QObject):
             self.log_signal.emit(f"로그인에 실패했습니다. 에러 코드: {err_code}")
         self.login_event_loop.exit()
 
-    def subscribe_realtime_data(self, screen_no, code, fid_list_str, real_type):
-        """
-        real_type: 0 - 최초구독, 1 - 종목 추가/삭제
-        """
-        self.log_signal.emit(f"[{code}]실시간 데이터 구독을 신청합니다...")
-        self.api.SetRealReg(screen_no, code, fid_list_str, real_type)
+    def subscribe_realtime_data(self, screen_no, code_list_str):
+        self.log_signal.emit(f"[{code_list_str}] 실시간 데이터 구독을 신청합니다.")
+        self.api.SetRealReg(screen_no, code_list_str, "20;10;15", "0")
 
     def disconnect_realtime_data(self, screen_no="0101"):
         self.api.DisconnectRealData(screen_no)
     
     def _receive_real_data(self, code, real_type, real_data):
         if real_type == "주식체결":
-            trade_time_str = self.api.GetCommRealData(code, 20)
-            current_price = abs(int(self.api.GetCommRealData(code, 10)))
-            trade_volume = abs(int(self.api.GetCommRealData(code, 15)))
-            
-            now = QDateTime.currentDateTime()
-            trade_time = QDateTime.fromString(now.toString('yyyyMMdd') + trade_time_str, 'yyyyMMddHHmmss')
+            try:
+                trade_time_str = self.api.GetCommRealData(code, 20)
+                current_price = abs(int(self.api.GetCommRealData(code, 10)))
+                trade_volume = abs(int(self.api.GetCommRealData(code, 15)))
 
-            minute = trade_time.time().minute()
-            window_minute = (minute // 3) * 3
-            window_start_qtime = QDateTime(trade_time.date(), trade_time.time().toPyTime().replace(minute=window_minute, second=0, microsecond=0))
-
-            if self.current_window_start_time is None or window_start_qtime > self.current_window_start_time:
-                if self.current_candle:
-                    self.candle_completed_signal.emit(self.current_candle)
+                now = QDateTime.currentDateTime()
+                trade_time = QDateTime.fromString(now.toString('yyyyMMdd') + trade_time_str, 'yyyyMMddHHmmss')
+                minute = trade_time.time().minute()
+                window_minute = (minute // 3) * 3
+                window_start_qtime = QDateTime(trade_time.date(), trade_time.time().toPyTime().replace(minute=window_minute, second=0, microsecond=0))
                 
-                self.current_window_start_time = window_start_qtime
-                self.current_candle = {
-                    'time': window_start_qtime.toString('yyyy-MM-dd HH:mm:ss'),
-                    'open': current_price,
-                    'high': current_price,
-                    'low': current_price,
-                    'close': current_price,
-                    'volume': trade_volume
-                }
-            else:
-                self.current_candle['high'] = max(self.current_candle['high'],current_price)
-                self.current_candle['low'] = min(self.current_candle['low'],current_price)
-                self.current_candle['close'] = current_price
-                self.current_candle['volume'] += trade_volume
-                print(f"\r[실시간 업데이트] 현재가:{current_price:,} | 고가:{self.current_candle['high']:,} | 저가:{self.current_candle['low']:,} | 누적거래량:{self.current_candle['volume']:,}", end="")
+                if code not in self.current_candles:
+                    self.current_candles[code] = {'start_time': None, 'data': {}}
+
+                current_candle_info = self.current_candles[code]
+                if current_candle_info['start_time'] is None or window_start_qtime > current_candle_info['start_time']:
+                    if current_candle_info['data']:
+                        self.candle_completed_signal.emit(current_candle_info['data'])
+                    current_candle_info['start_time'] = window_start_qtime
+                    current_candle_info['data'] = {
+                        'code': code,
+                        'date': window_start_qtime.toString('yyyyMMddHHmmss'),
+                        'open': current_price,
+                        'high': current_price,
+                        'low': current_price,
+                        'close': current_price,
+                        'volume': trade_volume
+                    }
+                else:
+                    candle = current_candle_info['data']
+                    candle['high'] = max(candle['high'], current_price)
+                    candle['low'] = min(candle['low'], current_price)
+                    candle['close'] = current_price
+                    candle['volume'] += trade_volume
+            except Exception as e:
+                print(f"!!! CRITICAL ERROR in _receive_real_data: {e}")
+                self.log_signal.emit(f"실시간 데이터 처리 오류: {e}")
 
     def send_order(self, rqname, screen_no, acc_no, order_type, code, qty, price, hoga_gb, org_order_no):
         """
