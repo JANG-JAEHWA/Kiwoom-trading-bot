@@ -3,13 +3,13 @@ from strategy import generate_features
 import joblib
 import os
 import time
+import socket
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 WATCHLIST_PATH = os.path.join(PROJECT_ROOT, "watchlist.txt")
 MODEL_PATH = os.path.join(PROJECT_ROOT, "models", "strategist_model_v1.joblib")
 LIVE_DIR = os.path.join(PROJECT_ROOT, "data", "live_data")
 HISTORICAL_DIR = os.path.join(PROJECT_ROOT, "data_3min")
-SIGNAL_DIR = os.path.join(PROJECT_ROOT, "signals")
 
 def load_data(path, dtype=None):
     try: return pd.read_csv(path, dtype=dtype)
@@ -27,28 +27,46 @@ def make_prediction(model, combined_df):
 
 def write_signal(signal, code):
     if signal == "BUY":
-        signal_path = os.path.join(SIGNAL_DIR, f"signal_{code}.txt")
-        if not os.path.exists(signal_path):
-            with open(signal_path, 'w') as f: f.write(f"BUY,{code},10")
-            print(f"!!! [{code}] 주문 신호 생성 !!!")
+        try:
+            message = f"BUY,{code},10"
+            client_socket.sendall(message.encode())
+            print(f"!!! 주문 신호 전송: {message}")
+        except Exception as e:
+            print(f"소켓 메시지 전송 실패: {e}")
+        
 
 
 def run_ai_controller():
-    print("--- AI 컨트롤러 시작 ---")
+    print("--- AI 컨트롤러 시작(소켓 버전) ---")
+
+    server_ip = '127.0.0.1'
+    server_port = 9999
+    client_socket = None
+
     try:
-        model = joblib.load(MODEL_PATH)
+        client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        client_socket.connect((server_ip, server_port))
+        print("GUI의 통신 서버에 성공적으로 접속했습니다.")
+    except Exception as e:
+        print(f"GUI 통신 서버 접속 실패: {e}")
+
+    try:
+        strategist_model = joblib.load(MODEL_PATH)
+        print("AI 전략가 모델을 성공적으로 불러왔습니다.")
     except FileNotFoundError:
         print(f"AI 모델을 찾을 수 없습니다: {MODEL_PATH}")
+        if client_socket: client_socket.close()
         return
     
     if not os.path.exists(LIVE_DIR): os.makedirs(LIVE_DIR)
-    if not os.path.exists(SIGNAL_DIR): os.makedirs(SIGNAL_DIR)
 
     last_mod_times = {}
     while True:
         try:
             with open(WATCHLIST_PATH, 'r') as f: watchlist = [line.strip() for line in f.readlines() if line.strip()]
-            if not watchlist: time.sleep(10); continue
+            if not watchlist: 
+                time.sleep(10)
+                continue
 
             for code in watchlist:
                 live_path = os.path.join(LIVE_DIR, f"live_{code}.csv")
@@ -65,11 +83,16 @@ def run_ai_controller():
                     
                     combined_df = pd.concat([hist_df, live_df]).drop_duplicates(['date'], keep='last')
                     if len(combined_df) > 100:
-                        signal = make_prediction(model, combined_df)
+                        signal = make_prediction(strategist_model, combined_df)
                         print(f"-> AI 판단: [{code}] {signal}")
-                        write_signal(signal, code)
+                        write_signal(signal, code, client_socket)
             time.sleep(3)
+        except (BrokenPipeError, ConnectionResetError):
+            print("GUI와의 연결이 끊어졌습니다. 컨트롤러를 종료합니다.")
+            break
         except Exception as e: print(f"\n컨트롤러 오류: {e}"); time.sleep(3)
-
-if __name__ == "__main__":
+    if client_socket: client_socket.close()
+def main():
     run_ai_controller()
+if __name__ == "__main__":
+    main()

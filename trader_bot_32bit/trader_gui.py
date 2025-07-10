@@ -6,6 +6,35 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QWidget,
 from PyQt5.QtCore import  QThread, pyqtSignal, QTimer, QDateTime
 from kiwoom_api import KiwoomAPI
 import pandas as pd
+import socket
+
+class SignalServerThread(QThread):
+    order_signal = pyqtSignal(str)
+
+    def __init__(self):
+        super().__init__()
+        self.is_running = True
+    
+    def run(self):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
+                server_socket.bind(('127.0.0.1', 9999))
+                server_socket.listen()
+                print("[Signal Server] AI 컨트롤러의 접속을 기다립나다...")
+                conn, addr = server_socket.accept()
+                with conn:
+                    print(f"[Signal_Server] AI 컨트롤러의 접속: {addr}")
+                    while self.is_running:
+                        data = conn.recv(1024)
+                        if not data:
+                            break
+                        message = data.decode()
+                        self.order_signal.emit(message)
+        except Exception as e:
+            print(f"[Signal Server] 오류 발생: {e}")
+        
+    def stop(self):
+        self.is_running = False
 
 
 class KiwoomWorker(QThread):
@@ -32,9 +61,8 @@ class MainWindow(QMainWindow):
         self.worker = None
         self.ai_process = None
 
-        self.signal_check_timer = QTimer(self)
-        self.signal_check_timer.timeout.connect(self.check_for_signals)
-
+        self.signal_server = SignalServerThread()
+        self.signal_server.order_signal.connect(self.on_ai_signal_received)
         self.initUI()
 
         self.kiwoom.log_signal.connect(self.update_log)
@@ -183,32 +211,30 @@ class MainWindow(QMainWindow):
         self.account_label.setText(f"계좌번호: {self.kiwoom.account_number}")
         self.statusBar.showMessage(f"현재시간: {QDateTime.currentDateTime().toString('yyyy-MM-dd hh:mm:ss')} | 상태: 로그인 완료")
 
-        self.signal_check_timer.start(5000)
         self.update_log("주문 신호 감지를 시작합니다...")
+        self.signal_server.start()
 
-    def check_for_signals(self):
-        signal_dir = "C:/program trading system/signals"
-        if not os.path.exists(signal_dir):
-            return
-        for signal_file in os.listdir(signal_dir):
-            if signal_file.endswith(".txt"):
-                file_path = os.path.join(signal_dir, signal_file)
-                try:
-                    with open(file_path, 'r') as f:
-                        content = f.read().strip()
-                    parts = content.split('r')
-                    if len(parts) == 3:
-                        signal, code, qty_str = parts
-                        qty = int(qty_str)
 
-                        self.update_log(f"!!! 주문 신호 수신: {code} 종목, {qty}주 {signal} 주문 실행!!!")
-                        order_type = 1 if signal == "BUY" else 2
-                        self.kiwoom.send_order("AIBotOrder", "0101", self.kiwoom.account_number, order_type, code, qty, 0, "03")
-
-                        os.remove(file_path)
-                except Exception as e:
-                    self.update_log(f"신호 파일 처리 중 오류 발생: {e}")
-                    os.remove(file_path)
+    def on_ai_signal_received(self, message):
+        try:
+            parts = message.split(',')
+            if len(parts) == 3:
+                signal, code, qty_str = parts
+                qty = int(qty_str)
+                self.update_log(f"!!! [직통 신호] {code} 종목, {qty}주 {signal} 주문 실행!!!")
+                order_type = 1 if signal == "BUY" else 2
+                worker = KiwoomWorker(
+                    self.kiwoom, "order",
+                    rqname=f"AIBot_{signal}",
+                    screen_no="0101", 
+                    acc_no=self.kiwoom.account_number, 
+                    order_type=order_type,
+                    code = code,
+                    qty = qty
+                )
+                worker.start()
+        except Exception as e:
+            self.update_log(f"신호 처리 중 오류: {e}")
         
 
     
@@ -230,6 +256,8 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         if self.ai_process:
             self.ai_process.terminate()
+        self.signal_server.stop()
+        self.signal_server.wait()
         QApplication.instance().quit()
         event.accept()
 
