@@ -7,6 +7,8 @@ from PyQt5.QtCore import  QThread, pyqtSignal, QTimer, QDateTime
 from kiwoom_api import KiwoomAPI
 import pandas as pd
 import socket
+import csv
+from datetime import datetime
 
 class SignalServerThread(QThread):
     order_signal = pyqtSignal(str)
@@ -260,6 +262,37 @@ class MainWindow(QMainWindow):
         self.signal_server.wait()
         QApplication.instance().quit()
         event.accept()
+    
+    def log_trade(self, trade_data):
+        log_path = "C:/program trading system/trade_log.csv"
+        file_exists = os.path.isfile(log_path)
+
+        with open(log_path, 'a', newline='', encoding='utf-8-sig') as f:
+            writer = csv.writer(f)
+            if not file_exists:
+                writer.writerow(['체결시간', '주문유형', '종목코드', '체결가격', '체결수량', '손익'])
+            
+            writer.writerow([
+                trade_data.get('체결시간'),
+                trade_data.get('주문유형'),
+                trade_data.get('종목코드'),
+                trade_data.get('체결가격'),
+                trade_data.get('체결수량'),
+                trade_data.get('손익', 0)
+            ])
+    
+    def on_order_result(self, result_data):
+        self.update_log(f"[주문 결과] {result_data}")
+        if result_data.get("주문상태") == "채결":
+            trade_info = {
+                '체결시간': datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 
+                '주문유형': result_data.get('주문유형', '매수'), 
+                '종목코드': result_data.get('종목코드'), 
+                '체결가격': result_data.get('체결가', 0), 
+                '체결수량': result_data.get('체결수량', 0)
+            }
+            self.log_trade(trade_info)
+            self.update_log(f"*** [거래기록] {trade_info['종목코드']} 체결 내역을 trade_log.csv에 저장했습니다. ***")
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)

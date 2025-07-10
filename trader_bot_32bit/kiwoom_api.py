@@ -1,7 +1,6 @@
 from PyQt5.QtCore import QEventLoop, QDateTime, QObject, pyqtSignal, QTimer
 from PyQt5.QAxContainer import QAxWidget
-import time
-
+import datetime
 class KiwoomAPI(QObject):
     log_signal = pyqtSignal(str)
     login_success_signal = pyqtSignal()
@@ -130,23 +129,32 @@ class KiwoomAPI(QObject):
         gubun 0: 주문 접수/채결, 1: 국내주식 잔고
         """
         if gubun == "0":
-            order_status = self.api.GetChejanData(913) # 주문상태
-            stock_code = self.api.GetChejanData(9001)[1:] # 종목코드
-            order_qty = int(self.api.GetChejanData(900)) # 주문수량
-            executed_price_str = self.api.GetChejanData(910)# 체결가
-            executed_qty_str = self.api.GetChejanData(911) # 체결수량
+            order_status = self.api.GetChejanData(913).strip() # 주문상태
+            stock_code = self.api.GetChejanData(9001)[1:].strip() # 종목코드
+            order_no = self.api.GetChejanData(9203).strip() # 주문번호
+            order_type_raw = self.api.GetChejanData(907).strip() # 매도수구분 (+매도, -매수)
 
-            executed_price = 0
-            executed_qty = 0
+            executed_price_str = self.api.GetChejanData(910).strip()# 체결가
+            executed_qty_str = self.api.GetChejanData(911).strip() # 체결수량
 
-            if executed_price_str:
-                executed_price = int(executed_price_str)
-            if executed_qty_str:
-                executed_qty = int(executed_qty_str)
-                
-            self.log_signal.emit(f"[주문/채결] 상태: {order_status}, 종목: {stock_code}, 주문수량: {order_qty}, 체결가: {executed_price}, 체결수량: {executed_qty}")
+            executed_price = int(executed_price_str) if executed_price_str else 0
+            executed_qty = int(executed_qty_str) if executed_qty_str else 0
+
+            order_type = "매도" if order_type_raw == "+매도" else "매수"
+
+            if order_status == "채결":
+                result = {
+                    "체결시간": datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 
+                    "주문유형": order_type, 
+                    "종목코드": stock_code,
+                    "주문번호": order_no, 
+                    "체결가격": executed_price, 
+                    "체결수량": executed_qty
+                }
+                self.order_result_signal.emit(result)
             if order_status in ["접수", "체결"]:
-                self.order_event_loop.exit()
+                if hasattr(self, 'order_event_loop') and self.order_event_loop.isRunning():
+                    self.order_event_loop.exit()
 
     def get_code_list(self, market_code):
         return self.api.GetCodeListByMarket(market_code).split(';')[:-1]
