@@ -1,0 +1,79 @@
+import pandas as pd
+import lightgbm as lgb
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, precision_score, recall_score, confusion_matrix
+import os
+import optuna
+import joblib
+
+def objective(trial, X_train, y_train, X_val, y_val):
+    params = {
+        'objective': 'binary',
+        'metric': 'binary_logloss',
+        'verbosity': -1,
+        'boosting_type': 'gbdt',
+        'device': 'gpu',
+        'random_state': 42,
+        'n_estimators': trial.suggest_int('n_estimators', 100, 2000),
+        'learning_rate': trial.suggest_float('learning_rate', 1e-3, 0.1, log=True),
+        'num_leaves': trial.suggest_int('num_leaves', 20, 300),
+        'max_depth': trial.suggest_int('max_depth', 3, 12),
+        'min_child_samples': trial.suggest_int('min_child_samples', 5, 100),
+        'subsample': trial.suggest_float('subsample', 0.6, 1.0),
+        'colsample_bytree': trial.suggest_float('colsample_bytree', 0.6, 1.0)
+    }
+
+    model = lgb.LGBMClassifier(**params)
+    model.fit(X_train, y_train,
+              eval_set=[(X_val, y_val)],
+              eval_metric='logloss',
+              callbacks=[lgb.early_stopping(50, verbose=False)])
+    preds = model.predict(X_val)
+    precision = precision_score(y_val, preds)
+    return precision
+
+def train_and_optimize_strategist():
+    print("--- AI 전략가 하이퍼파라미터 최적화 및 훈련 시작 ---")
+
+    data_path = "C:/program trading system/data/strategy_training_data.parquet"
+    try:
+        df = pd.read_parquet(data_path)
+    except FileNotFoundError:
+        print(f"오류: 최종 학습 데이터를 찾을 수 없습니다: {data_path}")
+        return
+    
+    features = ['volatility_1h', 'momentum_2h', 'volume_ratio', 'atr', 'roc', 'volatility_of_volatility', 'momentum_acceleration', 'vp_corr_1h']
+    X = df[features]
+    y = df['target']
+
+    train_size = int(len(df) * 0.7)
+    val_size = int(len(df) * 0.1)
+    X_train, X_test = X[:train_size], X[train_size+val_size:]
+    y_train, y_test = y[:train_size], y[train_size+val_size:]
+    X_val, y_val = X[train_size:train_size+val_size], y[train_size:train_size+val_size]
+
+    print(f"훈련 데이터: {len(X_train)}개, 검증 데이터: {len(X_val)}개, 테스터 데이터: {len(X_test)}")
+
+    study = optuna.create_study(direction='maximize')
+    study.optimize(lambda trial: objective(trial, X_train, y_train, X_val, y_val), n_trials=100, show_progress_bar=True)
+
+    print("\n--- 최적화 완료 ---")
+    print(f"최고 정밀도: {study.best_value:.4f}")
+    print("최적 하이퍼파라미터:")
+    print(study.best_params)
+
+    print("\n최적의 하이퍼파라미터로 최종 모델을 훈련합니다...")
+    final_model = lgb.LGBMClassifier(**study.best_params, device='gpu', random_state=42)
+    final_model.fit(pd.concat([X_train, X_val]), pd.concat([y_train, y_val]))
+
+    final_preds = final_model.predict(X_test)
+    final_precision = precision_score(y_test, final_preds)
+    print("\n--- 최종 모델 성능 평가 (테스트 데이터) ---")
+    print(f"최종 정밀도: {final_precision *100:.2f}%")
+
+    model_path = "C:/program trading system/models/strategist_model_v1_optimized.joblib"
+    joblib.dump(final_model, model_path)
+    print(f"\n최적화된 AI 전략가 모델을 '{model_path}'에 저장했습니다.")
+
+if __name__ == "__main__":
+    train_and_optimize_strategist()

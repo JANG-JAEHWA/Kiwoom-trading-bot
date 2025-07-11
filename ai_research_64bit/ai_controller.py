@@ -1,5 +1,5 @@
 import pandas as pd
-from strategy import generate_features
+from feature_engineering import generate_features
 import joblib
 import os
 import time
@@ -7,7 +7,7 @@ import socket
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 WATCHLIST_PATH = os.path.join(PROJECT_ROOT, "watchlist.txt")
-MODEL_PATH = os.path.join(PROJECT_ROOT, "models", "strategist_model_v1.joblib")
+MODEL_PATH = os.path.join(PROJECT_ROOT, "models", "strategist_model_daily.joblib")
 LIVE_DIR = os.path.join(PROJECT_ROOT, "data", "live_data")
 HISTORICAL_DIR = os.path.join(PROJECT_ROOT, "data_3min")
 
@@ -18,14 +18,14 @@ def load_data(path, dtype=None):
 def make_prediction(model, combined_df):
     features_df = generate_features(combined_df.copy())
     if len(features_df) < 1: return "HOLD"
-    features = ['volatility_1h', 'momentum_2h', 'volume_ratio']
+    features = ['volatility_1h', 'momentum_2h', 'volume_ratio', 'atr', 'roc', 'volatility_of_volatility', 'momentum_acceleration', 'vp_corr_1h']
     latest_features = features_df[features].iloc[[-1]]
     if latest_features.isnull().values.any(): return "HOLD"
     prediction = model.predict(latest_features)
     if prediction[0] == 1: return "BUY"
     return "HOLD"
 
-def write_signal(signal, code):
+def write_signal(signal, code, client_socket):
     if signal == "BUY":
         try:
             message = f"BUY,{code},10"

@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import joblib
 import os
-
+from feature_engineering import generate_features
 def ai_strategy(daily_data, model_path='C:/program trading system/models/strategist_model_v1.joblib'):
     """
     ai가 판단하여 매수,매도 신호 반환
@@ -31,27 +31,3 @@ def ai_strategy(daily_data, model_path='C:/program trading system/models/strateg
         return "SELL"
     else:
         return "HOlD"
-
-def generate_features(df):
-    df_new = df.copy()
-    df_new['price_change'] = df_new['close'].pct_change()
-    df_new['volatility_1h'] = df_new['price_change'].rolling(window=20).std()
-
-    df_new['momentum_2h'] = df_new['close'].pct_change(periods=40)
-
-    df_new['volume_mean_1h'] = df_new['volume'].rolling(window=20).mean()
-    df_new['volume_mean_5h'] = df_new['volume'].rolling(window=100).mean()
-    df_new['volume_ratio'] = df_new['volume_mean_1h'] / df_new['volume_mean_5h']
-
-    high_low = df_new['high'] - df_new['low']
-    high_close = np.abs(df_new['high'] - df_new['close'].shift())
-    low_close = np.abs(df_new['low'] - df_new['close'].shift())
-    tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
-    df_new['atr'] = tr.rolling(window=14).mean()
-
-    df_new['roc'] = df_new['close'].pct_change(periods=20)
-
-    df_new = df_new.drop(columns=['price_change', 'volume_mean_1h', 'volume_mean_5h'])
-
-    return df_new.dropna()
-    
