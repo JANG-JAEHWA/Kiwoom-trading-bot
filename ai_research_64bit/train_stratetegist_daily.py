@@ -2,25 +2,40 @@ import pandas as pd
 import lightgbm as lgb
 import joblib
 import os
+import optuna
+
+def get_best_params_from_db():
+    try:
+        storage_name = "sqlite:///strategist_optimization.db"
+        study = optuna.load_study(
+            study_name="strategist_v1",
+            storage=storage_name
+        )
+        print("Optuna 데이터베이스에서 최적의 하이퍼파라미터를 성공적으로 불러왔습니다.")
+        return study.best_params
+    except Exception as e:
+        print(f"Optuna DB 로딩 실패: {e}")
+        print("기본 하이퍼파라미터를 사용합니다.")
+        return {
+            'n_estimators': 549,
+            'learning_rate': 0.013382611503393602,
+            'num_leaves': 72,
+            'max_depth': 3,
+            'device': 'gpu',
+            'random_state': 42
+        }
 
 def train_daily_strategist():
     print("--- AI 전략가 일일 훈련 시작 (최적화된 파라미터 사용) ---")
 
-    best_params = {
-        'objective': 'binary',
-        'metric': 'binary_logloss',
-        'verbosity': -1,
-        'boosting_type': 'gbdt',
-        'device': 'gpu',
-        'random_state': 42,
-        'n_estimators': 549,
-        'learning_rate': 0.013382611503393602,
-        'num_leaves': 72,
-        'max_depth': 3,
-        'min_child_samples': 97,
-        'subsample': 0.7948628074437458,
-        'colsample_bytree': 0.8399823422764647
-    }
+    best_params = get_best_params_from_db()
+
+    best_params['device'] = 'gpu'
+    best_params['randome_state'] = 42
+
+    print("\n[적용될 하이퍼파라미터]")
+    print(best_params)
+    
     data_path = "C:/program trading system/data/strategy_training_data.parquet"
     try:
         df = pd.read_parquet(data_path)
