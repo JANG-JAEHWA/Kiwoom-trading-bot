@@ -53,8 +53,6 @@ def train_and_optimize_scout():
     y_train = y[:train_size]
     X_val, y_val = X[train_size:train_size+val_size], y[train_size:train_size+val_size]
 
-    print(f"훈련 데이터: {len(X_train)}개, 검증 데이터: {len(X_val)}개, 테스터 데이터: {len(X_test)}")
-
     storage_name = "sqlite:///scout_optimization.db"
     study = optuna.create_study(
         storage=storage_name,
