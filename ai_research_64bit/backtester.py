@@ -1,90 +1,114 @@
 import pandas as pd
+import numpy as np
 from tqdm import tqdm
+import pandas_ta as ta
 from strategy import ai_strategy
 import os
 
-def run_backtest(df, initial_capital=10000000):
-    capital = initial_capital
-    fee_rate = 0.003
-    profit_target = 0.03
-    stop_loss_target = -0.015
+tqdm.pandas()
 
-    position = 0
-    buy_price = 0
-    trades = []
+def run_backtest(df, initial_capital=10000000, atr_multipilier=2.5, fee_tax_rate=0.003):
 
-    for i in tqdm(range(100, len(df)), desc="백테스팅 진행 중"):
-        current_price = df.iloc[i]['close']
-        current_date = df.iloc[i]['date']
+    df['atr'] = ta.atr(df['high'], df['low'], df['close'], length=14)
+    df.dropna(inplace=True)
 
-        if position > 0:
-            if current_price >= buy_price * (1 + profit_target):
-                sell_value = position * current_price
-                capital += sell_value * (1 - fee_rate)
-                trades.append({'date': current_date, 'type': 'TAKE_PROFIT', 'price': current_price, 'qty': position})
-                position = 0
-                buy_price = 0
+    cash = initial_capital
+    shares = 0
+    position_value = 0
+    entry_price = 0
+    stop_loss_price = 0
+    highest_price_since_buy = 0
+
+    trade_count = 0
+    win_count = 0
+
+    for i in range(1, len(df)):
+        current_price = df['close'].iloc[i]
+        current_atr = df['atr'].iloc[i]
+        signal = df['target'].iloc[i-1]
+
+        if shares > 0:
+            highest_price_since_buy = max(highest_price_since_buy, df['high'].iloc[i])
+
+            trailing_stop_price = highest_price_since_buy - (current_atr * atr_multipilier)
+            stop_loss_price = max(stop_loss_price, trailing_stop_price)
+
+            is_time_to_sell = (df.index[i].hour == 15 and df.index[i].minute >= 20)
+
+            if current_price < stop_loss_price or is_time_to_sell:
+                sell_value = shares * current_price
+                cash += sell_value * (1 - fee_tax_rate)
+                
+                if current_price > entry_price:
+                    win_count += 1
+                shares = 0
+                position_value = 0
+                entry_price = 0
                 continue
-            elif current_price <= buy_price * (1 + stop_loss_target):
-                sell_value = position * current_price
-                capital += sell_value * (1 - fee_rate)
-                trades.append({'date': current_date, 'type': 'STOP_LOSS', 'price': current_price, 'qty': position})
-                position = 0
-                buy_price = 0
-                continue
-        else:
-            daily_data = df.iloc[:i+1]
-            signal = ai_strategy(daily_data)
             
-            if signal == "BUY":
-                buy_value = capital
-                buy_qty = int(buy_value / current_price)
+        if shares == 0 and signal == 1:
+            shares_to_buy = cash // current_price
+            if shares_to_buy > 0:
+                buy_value = shares_to_buy * current_price
+                cash -= buy_value * (1 + fee_tax_rate)
+                shares = shares_to_buy
+                position_value = buy_value
+                entry_price = current_price
+                highest_price_since_buy = current_price
 
-                if buy_qty > 0:
-                    cost = buy_qty * current_price
-                    capital -= cost * (1 + fee_rate)
-                    position = buy_qty
-                    buy_price = current_price
-                    trades.append({'date': current_date, 'type': 'BUY', 'price': current_price, 'qty': buy_qty})
-    if position > 0:
-        last_price = df.iloc[-1]['close']
-        capital += position * last_price * (1 - fee_rate)
-        trades.append({'date': df.iloc[-1]['date'], 'type': 'EXIT', 'price': last_price, 'qty': position})
-    final_balance = capital
-    profit = final_balance - initial_capital
-    profit_rate = (profit / initial_capital) * 100
+                stop_loss_price = current_price - (current_atr * atr_multipilier)
+                trade_count += 1
+    final_capital = cash + (shares * df['close'].iloc[-1])
+    return final_capital, trade_count, win_count
+         
+           
 
-    return final_balance, profit, profit_rate, pd.DataFrame(trades)
+def find_optimal_atr_multiplier():
+    input_path = "C:/program trading system/data/strategy_training_data.parquet"
+    print(f"{input_path} 파일에서 학습 데이터를 불러옵니다...")
+    df = pd.read_parquet(input_path)
+    df['date'] = pd.to_datetime(df['date'])
+    df.set_index('date', inplace=True)
+    
+    atr_multipliers = np.arange(1.5, 4.1, 0.5)
 
-def main():
-    try:
-        with open("C:/program trading system/watchlist.txt", "r") as f:
-            stock_code_list = f.readlines()
-            stock_code = stock_code_list[0].strip() # 몇째 줄 읽기
-            if not stock_code:
-                print("오류: watchlist.txt 파일이 비어있습니다.")
-                return
-    except FileNotFoundError:
-        print("오류: watchlist.txt 파일을 찾을 수 없습니다. 스카우터를 먼저 실행해주세요.")
-        return
-    data_path = f"C:/program trading system/data_3min/{stock_code}_3min_data.csv"
-    try:
-        df = pd.read_csv(data_path, dtype={'date': str})
-    except FileNotFoundError:
-        print(f"오류: {stock_code}의 데이터 파일을 찾을 수 없습니다.")
-        return
-    print(f"--- [{stock_code}] 종목 AI 전략 백테스팅 시작 ---")
-    final_balance, profit, profit_rate, trade_df = run_backtest(df)
+    results = []
 
-    print("\n--- 백테스팅 결과 ---")
-    print(f"최종 자산: {final_balance:,.0f}원")
-    print(f"총 손익: {profit:,.0f}원")
-    print(f"수익률: {profit_rate:.2f}%")
-    print(f"총 거래 횟수: {len(trade_df)}")
-    print("\n--- 거래 내역 ---")
-    print(trade_df.to_string())
+    all_codes = df['code'].unique()
 
+    for multiplier in atr_multipliers:
+        print(f"\n===== ATR Multiplier = {multiplier} 테스트 시작 =====")
+
+        total_final_capital = 0
+        total_trades = 0
+        total_wins = 0
+
+        for code in tqdm(all_codes, desc=f"Multiplier {multiplier}"):
+            stock_df = df[df['code'] == code].copy()
+            if len(stock_df) > 14:
+                final_capital, trades, wins = run_backtest(stock_df, atr_multipilier=multiplier)
+                total_final_capital += final_capital
+                total_trades += trades
+                total_wins += wins
+        initial_capital_per_stock = 10000000
+        total_initial_capital = initial_capital_per_stock * len(all_codes)
+
+        if total_initial_capital > 0:
+            avg_return = ((total_final_capital - total_initial_capital) / total_initial_capital) * 100
+            win_rate = (total_wins / total_trades) * 100 if total_trades > 0 else 0
+
+            results.append({
+                'ATR Multiplier': multiplier,
+                'Final Capital': total_final_capital,
+                'Average Return (%)': avg_return,
+                'Total Trades': total_trades,
+                'Win Rate (%)': win_rate
+            })
+    print("\n===== 최종 최적화 결과 =====")
+    result_df = pd.DataFrame(results)
+    print(result_df.to_string())
+   
 if __name__ == "__main__":
-    main()
+    find_optimal_atr_multiplier()
                 
                 
