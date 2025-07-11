@@ -12,36 +12,35 @@ env/
 # IDE and Editor Folders
 .vscode/
 .idea/
-.project/
-.settings/
 
 # OS-generated files
 .DS_Store
-Thumbs.db
 
 # --- [우리 프로젝트 맞춤 설정] ---
 
 # 민감한 설정 파일
 config.py
 
-# AI 모델 파일 (바이너리)
+# AI/ML 생성 파일
 models/
 *.joblib
 *.pkl
 *.h5
+.ipynb_checkpoints/
 
-# 데이터 파일 및 폴더 (Git으로 관리하지 않음)
+# 데이터 파일 및 폴더
 data/
 data_3min/
 live_data/
-live_data.csv
-market_summary.parquet
-market_summary_features.csv
-training_data.parquet
-strategy_training_data.parquet
 watchlist.txt
-signal.txt
+signals/
 *.log
 
-# Jupyter Notebook Checkpoints
-.ipynb_checkpoints/
+# 데이터베이스 파일
+*.db
+*.sqlite3
+
+# PyInstaller 빌드 결과물
+dist/
+build/
+*.spec
