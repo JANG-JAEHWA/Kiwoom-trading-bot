@@ -22,15 +22,18 @@ def objective(trial, X_train, y_train, X_val, y_val):
         'subsample': trial.suggest_float('subsample', 0.6, 1.0),
         'colsample_bytree': trial.suggest_float('colsample_bytree', 0.6, 1.0)
     }
+    try:
+        model = lgb.LGBMClassifier(**params)
+        model.fit(X_train, y_train,
+                eval_set=[(X_val, y_val)],
+                eval_metric='logloss',
+                callbacks=[lgb.early_stopping(50, verbose=False)])
+        preds = model.predict(X_val)
+        precision = precision_score(y_val, preds)
+        return precision
+    except lgb.basic.LightGBMError:
+        raise optuna.exceptions.TrialPruned()
 
-    model = lgb.LGBMClassifier(**params)
-    model.fit(X_train, y_train,
-              eval_set=[(X_val, y_val)],
-              eval_metric='logloss',
-              callbacks=[lgb.early_stopping(50, verbose=False)])
-    preds = model.predict(X_val)
-    precision = precision_score(y_val, preds)
-    return precision
 
 def train_and_optimize_strategist():
     print("--- AI 전략가 하이퍼파라미터 최적화 및 훈련 시작 ---")
@@ -54,7 +57,13 @@ def train_and_optimize_strategist():
 
     print(f"훈련 데이터: {len(X_train)}개, 검증 데이터: {len(X_val)}개, 테스터 데이터: {len(X_test)}")
 
-    study = optuna.create_study(direction='maximize')
+    storage_name = "sqlite:///strategist_optimization.db"
+    study = optuna.create_study(
+        storage=storage_name,
+        study_name="strategist_v1",
+        direction='maximize',
+        load_if_exists=True
+    )
     study.optimize(lambda trial: objective(trial, X_train, y_train, X_val, y_val), n_trials=100, show_progress_bar=True)
 
     print("\n--- 최적화 완료 ---")
