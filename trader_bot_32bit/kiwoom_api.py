@@ -1,6 +1,7 @@
 from PyQt5.QtCore import QEventLoop, QDateTime, QObject, pyqtSignal, QTimer
 from PyQt5.QAxContainer import QAxWidget
 import datetime
+
 class KiwoomAPI(QObject):
     log_signal = pyqtSignal(str)
     login_success_signal = pyqtSignal()

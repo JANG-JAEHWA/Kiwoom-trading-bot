@@ -70,6 +70,7 @@ class MainWindow(QMainWindow):
         self.kiwoom.log_signal.connect(self.update_log)
         self.kiwoom.login_success_signal.connect(self.on_login_success)
         self.kiwoom.candle_completed_signal.connect(self.on_candle_completed)
+        self.kiwoom.order_result_signal.connect(self.on_order_result)
 
     def initUI(self):
         self.setWindowTitle('AI 자동매매 시스템 v3.0 - 최종 관제탑')
@@ -225,15 +226,12 @@ class MainWindow(QMainWindow):
                 qty = int(qty_str)
                 self.update_log(f"!!! [직통 신호] {code} 종목, {qty}주 {signal} 주문 실행!!!")
                 order_type = 1 if signal == "BUY" else 2
-                worker = KiwoomWorker(
-                    self.kiwoom, "order",
-                    rqname=f"AIBot_{signal}",
-                    screen_no="0101", 
-                    acc_no=self.kiwoom.account_number, 
-                    order_type=order_type,
-                    code = code,
-                    qty = qty
-                )
+                order_kwargs = {
+                    "rqname": f"AIBot_{signal}_{code}", "screen_no": "0101",
+                    "acc_no": self.kiwoom.account_number, "order_type": order_type,
+                    "code": code, "qty": qty, "price": 0, "hoga_gb": "03" # 시장가 주문
+                }
+                worker = KiwoomWorker(self.kiwoom, "order", **order_kwargs)
                 worker.start()
         except Exception as e:
             self.update_log(f"신호 처리 중 오류: {e}")
@@ -283,16 +281,9 @@ class MainWindow(QMainWindow):
     
     def on_order_result(self, result_data):
         self.update_log(f"[주문 결과] {result_data}")
-        if result_data.get("주문상태") == "채결":
-            trade_info = {
-                '체결시간': datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 
-                '주문유형': result_data.get('주문유형', '매수'), 
-                '종목코드': result_data.get('종목코드'), 
-                '체결가격': result_data.get('체결가', 0), 
-                '체결수량': result_data.get('체결수량', 0)
-            }
-            self.log_trade(trade_info)
-            self.update_log(f"*** [거래기록] {trade_info['종목코드']} 체결 내역을 trade_log.csv에 저장했습니다. ***")
+        if result_data.get("주문상태") == "체결":
+            self.log_trade(result_data)
+            self.update_log(f"*** [거래기록] {result_data.get('종목코드')} 체결 내역을 trade_log.csv에 저장했습니다. ***")
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
