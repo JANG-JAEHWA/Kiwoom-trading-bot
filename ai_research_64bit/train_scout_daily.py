@@ -56,8 +56,14 @@ def train_and_recommend_daily():
     watchlist_path = "C:/program trading system/watchlist.txt"
     if recommended_stocks.empty:
         print("오늘은 추천할 만한 종목을 찾지 못했습니다.")
-        with open(watchlist_path, "w") as f:
-            f.write("")
+        top_candidate = latest_data.sort_values(by='recommend_proba', ascending=False).head(1)
+        if not top_candidate.empty:
+            print("\n--- 참고: 오늘 가장 확률이 높은 종목 ---")
+            print(top_candidate[['code', 'recommend_proba']])
+            top_candidate_code = top_candidate['code'].tolist()
+            with open(watchlist_path, "w") as f:
+                for code in top_candidate_code:
+                    f.write(f"{code}\n")
     else:
         print(recommended_stocks[['code', 'recommend_proba']].head(10))
         recommended_codes = recommended_stocks['code'].tolist()
