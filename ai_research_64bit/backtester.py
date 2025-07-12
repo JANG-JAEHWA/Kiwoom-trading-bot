@@ -7,7 +7,7 @@ import os
 
 tqdm.pandas()
 
-def run_sigle_stock_backtest(df, initial_capital=100000000, atr_multipilier=2.5):
+def run_single_stock_backtest(df, initial_capital=100000000, atr_multipilier=2.5):
 
     fee_tax_rate=0.003
     df['atr'] = ta.atr(df['high'], df['low'], df['close'], length=14)
@@ -35,10 +35,9 @@ def run_sigle_stock_backtest(df, initial_capital=100000000, atr_multipilier=2.5)
             if current_price < stop_loss_price:
                 sell_value = shares * current_price
                 cash += sell_value * (1 - fee_tax_rate)
-                
                 if current_price > entry_price:
                     win_count += 1
-                    shares = 0
+                shares = 0
             
         elif shares == 0 and signal == 1:
             if cash >= trade_amount:
@@ -65,7 +64,7 @@ def objective(trial, all_stocks_df):
     for code in all_codes:
         stock_df = all_stocks_df[all_stocks_df['code'] == code].copy()
         if len(stock_df) > 14:
-            final_capital, _, _ = run_sigle_stock_backtest(stock_df, initial_capital_per_stock, atr_multiplier)
+            final_capital, _, _ = run_single_stock_backtest(stock_df, initial_capital_per_stock, atr_multiplier)
             total_final_capital += final_capital
     return total_final_capital
 
@@ -79,7 +78,7 @@ def find_optimal_atr_with_optuna():
     storage_name = "sqlite:///backtest_optimization.db"
     study = optuna.create_study(
         storage=storage_name,
-        study_name="atr_stop_optimization.db",
+        study_name="atr_stop_optimizer_v1",
         direction='maximize',
         load_if_exists=True
     )
