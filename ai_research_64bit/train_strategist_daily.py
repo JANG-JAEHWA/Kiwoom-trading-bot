@@ -31,7 +31,7 @@ def train_daily_strategist():
     best_params = get_best_params_from_db()
 
     best_params['device'] = 'gpu'
-    best_params['randome_state'] = 42
+    best_params['random_state'] = 42
 
     print("\n[적용될 하이퍼파라미터]")
     print(best_params)
