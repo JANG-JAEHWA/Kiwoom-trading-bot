@@ -8,7 +8,7 @@ import os
 import random
 import json
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import precision_score
+from sklearn.metrics import precision_score, f1_score
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
@@ -66,7 +66,9 @@ def find_best_entry_model(stock_df):
         model = lgb.LGBMClassifier(**params)
         model.fit(X_train, y_train, eval_set=[(X_val, y_val)], callbacks=[lgb.early_stopping(50, verbose=False)])
         preds = model.predict(X_val)
-        return precision_score(y_val, preds)
+        if preds.sum() < 10:
+            raise optuna.exceptions.TrialPruned()
+        return f1_score(y_val, preds)
 
     study = optuna.create_study(direction='maximize')
     study.optimize(objective, n_trials=50, show_progress_bar=True)

@@ -3,7 +3,7 @@ import lightgbm as lgb
 import joblib
 import os
 import optuna
-from sklearn.metrics import precision_score
+from sklearn.metrics import precision_score, f1_score
 
 def objective(trial, X_train, y_train, X_val, y_val):
     params = {
@@ -28,8 +28,9 @@ def objective(trial, X_train, y_train, X_val, y_val):
                 eval_metric='logloss',
                 callbacks=[lgb.early_stopping(50, verbose=False)])
         preds = model.predict(X_val)
-        precision = precision_score(y_val, preds)
-        return precision
+        if preds.sum() < 10:
+            raise optuna.exceptions.TrialPruned()
+        return f1_score(y_val, preds)
     except lgb.basic.LightGBMError:
         raise optuna.exceptions.TrialPruned()
     
