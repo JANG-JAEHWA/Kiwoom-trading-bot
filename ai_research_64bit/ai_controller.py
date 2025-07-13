@@ -1,26 +1,33 @@
-import pandas as pd, joblib, os, time, socket
+import pandas as pd, joblib, os, time, socket, json
 from feature_engineering import generate_features
 from datetime import datetime
 import pandas_ta as ta
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 WATCHLIST_PATH = os.path.join(PROJECT_ROOT, "watchlist.txt")
-MODEL_PATH = os.path.join(PROJECT_ROOT, "models", "strategist_model_daily.joblib")
+MODEL_DIR = os.path.join(PROJECT_ROOT, "models", "custom_stratgists")
+RULES_PATH = os.path.join(PROJECT_ROOT, "rules", "optimal_rules.json")
 LIVE_DIR = os.path.join(PROJECT_ROOT, "data", "live_data")
 HISTORICAL_DIR = os.path.join(PROJECT_ROOT, "data_3min")
 
-positions = []
+positions = {}
+optimal_rules = {}
 
 def load_data(path):
     try: return pd.read_csv(path, dtype={'date': str})
     except (FileNotFoundError, pd.errors.EmptyDataError): return None
 
-def get_signal(model, combined_df):
+def get_signal(code, combined_df):
+    model_path = os.path.join(MODEL_DIR, f"strategist_{code}.joblib")
+    try: model = joblib.load(model_path)
+    except FileNotFoundError: return "HOLD"
+
     features_df = generate_features(combined_df.copy())
     if len(features_df) < 1: return "HOLD"
     features = ['volatility_1h', 'momentum_2h', 'volume_ratio', 'atr', 'roc', 'volatility_of_volatility', 'momentum_acceleration', 'vp_corr_1h']
     latest_features = features_df[features].iloc[[-1]]
     if latest_features.isnull().values.any(): return "HOLD"
+
     prediction = model.predict(latest_features)
     if prediction[0] == 1: return "BUY"
     return "HOLD"
@@ -34,8 +41,6 @@ def send_signal(signal, code, qty, client_socket):
         except Exception as e:
             print(f"소켓 메시지 전송 실패: {e}")
         
-
-
 def run_ai_controller():
     print("--- AI 컨트롤러 시작(실전 버전) ---")
 
@@ -49,15 +54,11 @@ def run_ai_controller():
         print(f"GUI 통신 서버 접속 실패: {e}")
         return
 
+    global optimal_rules
     try:
-        model = joblib.load(MODEL_PATH)
-        print("AI 전략가 모델을 성공적으로 불러왔습니다.")
-    except FileNotFoundError:
-        print(f"AI 모델을 찾을 수 없습니다: {MODEL_PATH}")
-        client_socket.close()
-        return
-    
-    if not os.path.exists(LIVE_DIR): os.makedirs(LIVE_DIR)
+        with open(RULES_PATH, 'r') as f: optimal_rules = json.load(f)
+        print("종목별 최적 청산 규칙을 성공적으로 불러왔습니다.")
+    except FileNotFoundError: print(f"경고: 최적 규칙 파일({RULES_PATH})을 찾을 수 없습니다.")
 
     last_mod_times = {}
     while True:
@@ -90,18 +91,20 @@ def run_ai_controller():
                     pos = positions[code]
                     currnet_atr = ta.atr(combined_df['high'], combined_df['low'], combined_df['close'], length=14).iloc[-1]
 
+                    atr_multiplier = optimal_rules.get(code, {}).get('atr_multiplier', 2.5)
+
                     pos['highest_price'] = max(pos['highest_price'], current_price)
-                    trailing_stop_price = pos['highest_price'] - (currnet_atr * 2.5) # ATR 2.5배수
+                    trailing_stop_price = pos['highest_price'] - (currnet_atr * atr_multiplier)
                     pos['stop_loss_price'] = max(pos['stop_loss_price'], trailing_stop_price)
 
-                    is_time_to_exit = datetime.now().hour == 15 and datetime.now().minute >= 20
+                    is_time_to_exit = datetime.now().hour == 14 and datetime.now().minute >= 55
 
                     if current_price < pos['stop_loss_price'] or is_time_to_exit:
                         print(f"-> AI 판단: [{code}] SELL (청산)")
                         send_signal("SELL", code, pos['qty'], client_socket)
                         del positions[code]
                 else:
-                    signal = get_signal(model, combined_df)
+                    signal = get_signal(code, combined_df)
                     print(f"-> AI 판단: [{code}] {signal}")
                     if signal == "BUY":
                         trade_capital = 1_000_000
@@ -111,14 +114,13 @@ def run_ai_controller():
                             continue
                         send_signal("buy", code, buy_qty, client_socket)
                         currnet_atr = ta.atr(combined_df['high'], combined_df['low'], combined_df['close'], length=14).iloc[-1]
-                        positions[code] = {'entry_price': current_price, 'qty': buy_qty, 'highest_price': current_price, 'stop_loss_price': current_price - (current_price * 2.5)}
+                        positions[code] = {'entry_price': current_price, 'qty': buy_qty, 'highest_price': current_price, 'stop_loss_price': current_price - (current_price * atr_multiplier)}
             time.sleep(3)
         except (BrokenPipeError, ConnectionResetError):
             print("GUI와의 연결이 끊어졌습니다. 컨트롤러를 종료합니다.")
             break
         except Exception as e: print(f"\n컨트롤러 오류: {e}"); time.sleep(3)
     if client_socket: client_socket.close()
-def main():
-    run_ai_controller()
+
 if __name__ == "__main__":
-    main()
+    run_ai_controller()

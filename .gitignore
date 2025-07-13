@@ -30,6 +30,7 @@ models/
 
 # 데이터 파일 및 폴더
 data/
+rules/
 data_3min/
 live_data/
 watchlist.txt
