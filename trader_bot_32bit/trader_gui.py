@@ -101,17 +101,14 @@ class MainWindow(QMainWindow):
         self.start_button = QPushButton('1. 키움증권 로그인')
         self.monitor_button = QPushButton('2. 실시간 모니터링 시작')
         self.ai_button = QPushButton('3. AI 컨트롤러 시작')
-        self.update_data_button = QPushButton('데이터 최신화')
         self.exit_button = QPushButton('프로그램 종료')
         self.exit_button.clicked.connect(self.close)
 
         self.monitor_button.setDisabled(True)
         self.ai_button.setDisabled(True)
-        self.update_data_button.setDisabled(True)
         
         button_hbox.addWidget(self.start_button)
         button_hbox.addWidget(self.monitor_button)
-        button_hbox.addWidget(self.update_data_button)
         button_hbox.addWidget(self.ai_button)
         button_hbox.addWidget(self.exit_button)
 
@@ -132,7 +129,6 @@ class MainWindow(QMainWindow):
 
         self.start_button.clicked.connect(self.start_login)
         self.monitor_button.clicked.connect(self.start_monitoring)
-        self.update_data_button.clicked.connect(self.start_data_update)
         self.ai_button.clicked.connect(self.start_ai_controller)
 
         self.show()
@@ -162,17 +158,6 @@ class MainWindow(QMainWindow):
             self.ai_button.setDisabled(True)
         except Exception as e:
             self.update_log(f"AI 컨트롤라 실행 실패: {e}")
-
-    def start_data_update(self):
-        self.update_log("'데이터 최신화'를 시작합니다. 새 터미널 창에서 확인하세요...")
-        try:
-            py_32bit_path = "C:/Users/pc/AppData/Local/Programs/Python/Python39-32/python.exe"
-            collector_script_path = "C:/program trading system/trader_bot_32bit/update_data.py"
-
-            subprocess.Popen([py_32bit_path, collector_script_path], creationflags=subprocess.CREATE_NEW_CONSOLE)
-            self.update_log("데이터 수집기가 백그라운드에서 실행되었습니다.")
-        except Exception as e:
-            self.update_log(f"데이터 수집기 실행 실패: {e}")
             
     def update_time(self):
         """
