@@ -5,7 +5,8 @@ import datetime
 class KiwoomAPI(QObject):
     log_signal = pyqtSignal(str)
     login_success_signal = pyqtSignal()
-    candle_completed_signal = pyqtSignal(dict)
+    candle_1min_completed_signal = pyqtSignal(dict)
+    candle_3min_completed_signal = pyqtSignal(dict)
     order_result_signal = pyqtSignal(dict)
     progress_signal = pyqtSignal(str)
 
@@ -26,7 +27,9 @@ class KiwoomAPI(QObject):
         self.current_code = ""
         self.req_manager = None
 
-        self.current_candles = {}
+        self.candle_1min = {}
+        self.candle_3min = {}
+
         self.current_window_start_time = None
 
     def _set_event_handlers(self):
@@ -74,36 +77,45 @@ class KiwoomAPI(QObject):
 
                 now = QDateTime.currentDateTime()
                 trade_time = QDateTime.fromString(now.toString('yyyyMMdd') + trade_time_str, 'yyyyMMddHHmmss')
-                minute = trade_time.time().minute()
-                window_minute = (minute // 3) * 3
-                window_start_qtime = QDateTime(trade_time.date(), trade_time.time().toPyTime().replace(minute=window_minute, second=0, microsecond=0))
-                
-                if code not in self.current_candles:
-                    self.current_candles[code] = {'start_time': None, 'data': {}}
 
-                current_candle_info = self.current_candles[code]
-                if current_candle_info['start_time'] is None or window_start_qtime > current_candle_info['start_time']:
-                    if current_candle_info['data']:
-                        self.candle_completed_signal.emit(current_candle_info['data'])
-                    current_candle_info['start_time'] = window_start_qtime
-                    current_candle_info['data'] = {
-                        'code': code,
-                        'date': window_start_qtime.toString('yyyyMMddHHmmss'),
-                        'open': current_price,
-                        'high': current_price,
-                        'low': current_price,
-                        'close': current_price,
-                        'volume': trade_volume
-                    }
-                else:
-                    candle = current_candle_info['data']
-                    candle['high'] = max(candle['high'], current_price)
-                    candle['low'] = min(candle['low'], current_price)
-                    candle['close'] = current_price
-                    candle['volume'] += trade_volume
+                self._update_candle(code, current_price, trade_volume, trade_time, 1)
+                self._update_candle(code, current_price, trade_volume, trade_time, 3)
             except Exception as e:
                 print(f"!!! CRITICAL ERROR in _receive_real_data: {e}")
                 self.log_signal.emit(f"실시간 데이터 처리 오류: {e}")
+
+    def _update_candle(self, code, price, volume, time, interval):
+            candles = self.candle_1min if interval == 1 else self.candle_3min
+            signal_emitter = self.candle_1min_completed_signal if interval == 1 else self.candle_3min_completed_signal
+            
+            minute = time.time().minute()
+            window_minute = (minute // interval) * interval
+            window_start_qtime = QDateTime(time.date(), time.time().toPyTime().replace(minute=window_minute, second=0, microsecond=0))
+                
+            if code not in candles:
+                candles[code] = {'start_time': None, 'data': {}}
+
+            candle_info = candles[code]
+            if candle_info['start_time'] is None or window_start_qtime > candle_info['start_time']:
+                if candle_info['data']:
+                    signal_emitter.emit(candle_info['data'])
+                candle_info['start_time'] = window_start_qtime
+                candle_info['data'] = {
+                    'code': code,
+                    'date': window_start_qtime.toString('yyyyMMddHHmmss'),
+                    'open': price,
+                    'high': price,
+                    'low': price,
+                    'close': price,
+                    'volume': volume
+                }
+            else:
+                candle = candle_info['data']
+                candle['high'] = max(candle['high'], price)
+                candle['low'] = min(candle['low'], price)
+                candle['close'] = price
+                candle['volume'] += volume
+            
 
     def send_order(self, rqname, screen_no, acc_no, order_type, code, qty, price, hoga_gb, org_order_no):
         """

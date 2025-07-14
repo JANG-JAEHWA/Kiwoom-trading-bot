@@ -69,7 +69,8 @@ class MainWindow(QMainWindow):
 
         self.kiwoom.log_signal.connect(self.update_log)
         self.kiwoom.login_success_signal.connect(self.on_login_success)
-        self.kiwoom.candle_completed_signal.connect(self.on_candle_completed)
+        self.kiwoom.candle_1min_completed_signal.connect(self.on_1min_candle_completed)
+        self.kiwoom.candle_3min_completed_signal.connect(self.on_3min_candle_completed)
         self.kiwoom.order_result_signal.connect(self.on_order_result)
 
     def initUI(self):
@@ -161,27 +162,18 @@ class MainWindow(QMainWindow):
             
     def update_time(self):
         """
-        [수정] 매초마다 현재 시간과 함께, 다음 3분봉까지 남은 시간을 계산하여 상태바에 표시합니다.
+        [수정] 매초마다 현재 시간과 함께, 다음 1분봉까지 남은 시간을 계산하여 상태바에 표시합니다.
         """
         now = QDateTime.currentDateTime()
         
-        # 다음 3분봉 시간 계산
-        current_minute = now.time().minute()
-        minutes_to_next_window = 3 - (current_minute % 3)
-        seconds_to_next_window = 60 - now.time().second()
-        
-        # 실제 남은 시간 계산 (분, 초)
-        remaining_minutes = minutes_to_next_window - 1
-        remaining_seconds = seconds_to_next_window
-        
-        if seconds_to_next_window == 60:
-            remaining_minutes += 1
-            remaining_seconds = 0
-            
         # 상태 메시지 설정
         status_message = f"현재시간: {now.toString('yyyy-MM-dd hh:mm:ss')}"
-        if self.monitor_button.isEnabled() == False: # 모니터링이 시작되었을 때만 진행도 표시
-            status_message += f" | 다음 캔들까지: {remaining_minutes}분 {remaining_seconds}초"
+        if not self.monitor_button.isEnabled():
+            remaining_1min = 60 - now.time().second()
+            remaining_3min_m = 2 - (now.time().minute() % 3)
+            remaining_3min_s = 60 - now.time().second()
+
+            status_message += f" | 1분봉: {remaining_1min}초 후 | 3분봉: {remaining_3min_m}분 {remaining_3min_s}초 후"
             
         self.statusBar.showMessage(status_message)
     
@@ -194,7 +186,6 @@ class MainWindow(QMainWindow):
         self.start_button.setText("로그인 완료")
         self.monitor_button.setDisabled(False)
         self.ai_button.setDisabled(False)
-        self.update_data_button.setDisabled(False)
 
         self.account_label.setText(f"계좌번호: {self.kiwoom.account_number}")
         self.statusBar.showMessage(f"현재시간: {QDateTime.currentDateTime().toString('yyyy-MM-dd hh:mm:ss')} | 상태: 로그인 완료")
@@ -210,7 +201,7 @@ class MainWindow(QMainWindow):
                 signal, code, qty_str = parts
                 qty = int(qty_str)
                 self.update_log(f"!!! [직통 신호] {code} 종목, {qty}주 {signal} 주문 실행!!!")
-                order_type = 1 if signal == "BUY" else 2
+                order_type = 1 if signal == "BUY_Custom" or "BUY_Universal" else 2
                 order_kwargs = {
                     "rqname": f"AIBot_{signal}_{code}", "screen_no": "0101",
                     "acc_no": self.kiwoom.account_number, "order_type": order_type,
@@ -221,21 +212,30 @@ class MainWindow(QMainWindow):
         except Exception as e:
             self.update_log(f"신호 처리 중 오류: {e}")
         
+    def on_1min_candle_completed(self, candle_data):
+        self.save_candle_data(candle_data, "1min")
 
+    def on_3min_candle_completed(self, candle_data):
+        self.save_candle_data(candle_data, "3min")
     
-    def on_candle_completed(self, candle_data):
-        code = candle_data.get('code')
-        if not code: return
+    def save_candle_data(self, candle_data, interval_str):
         try:
-            live_data_dir = "C:/program trading system/data/live_data"
+            code = candle_data.get('code')
+            if not code: return
+
+            live_data_dir = f"C:/program trading system/data/live_data_{interval_str}"
             if not os.path.exists(live_data_dir): os.makedirs(live_data_dir)
+
             live_data_path = os.path.join(live_data_dir, f"live_{code}.csv")
+
             df = pd.DataFrame([candle_data])
-            if not os.path.exists(live_data_path):
-                df.to_csv(live_data_path, index=False, encoding='utf-8-sig')
-            else:
-                df.to_csv(live_data_path, mode='a', header=False, index=False, encoding='utf-8-sig')
-        except Exception as e: self.update_log(f"[{code}] 캔들 저장 오류: {e}")
+            header = not os.path.exists(live_data_path)
+            
+            df.to_csv(live_data_path, mode='a', header=header, index=False, encoding='utf-8-sig')
+            if interval_str == "3min":
+                self.update_log(f"[{code}] 3분봉 데이터 저장 완료")
+            
+        except Exception as e: self.update_log(f"[{code}] {interval_str} 캔들 저장 오류: {e}")
 
         
     def closeEvent(self, event):

@@ -61,7 +61,7 @@ def train_and_optimize_scout():
         direction='maximize',
         load_if_exists=True
     )
-    study.optimize(lambda trial: objective(trial, X_train, y_train, X_val, y_val), n_trials=100, show_progress_bar=True)
+    study.optimize(lambda trial: objective(trial, X_train, y_train, X_val, y_val), n_trials=100, show_progress_bar=True, n_jobs=-1)
 
     print("\n--- 최적화 완료 ---")
     print(f"스카우터 최고 정밀도: {study.best_value:.4f}")
