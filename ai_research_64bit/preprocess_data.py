@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 from feature_engineering import generate_features
 import os
 from tqdm import tqdm
@@ -26,17 +27,19 @@ def preprocess_all_data():
 
             if avg_trading_value < MIN_AVG_TRADING_VALUE:
                 continue
+            df.drop(columns=['trading_value', 'day'], inplace=True)
             
-            df_features = generate_features(df.drop(columns=['trading_value', 'day']))
+            df_features = generate_features(df)
+
+            df_features.replace([np.inf, -np.inf], np.nan, inplace=True)
+            df_features.dropna(inplace=True)
 
             df_features['code'] = code
-
             all_features_list.append(df_features)
 
         except Exception: continue
     
     final_df = pd.concat(all_features_list, ignore_index=True)
-    final_df.dropna(inplace=True)
 
     output_path = "C:/program trading system/data/market_summary.parquet"
     final_df.to_parquet(output_path, index=False)

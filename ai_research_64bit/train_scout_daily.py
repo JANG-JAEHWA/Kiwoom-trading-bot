@@ -25,8 +25,13 @@ def train_and_recommend_daily():
     print("--- AI 스카우터 훈련 및 추천 시작---")
 
     best_params = get_best_params_from_db()
-    best_params['device'] = 'gpu'
+    #best_params['device'] = 'gpu'
     best_params['random_state'] = 42
+    best_params['min_gain_to_split'] = 1e-6
+    best_params['min_child_weight'] = 1e-3
+
+    print("\n[적용될 최종 하이퍼파라미터]")
+    print(best_params)
 
     data_path = "C:/program trading system/data/training_data.parquet"
     try:
