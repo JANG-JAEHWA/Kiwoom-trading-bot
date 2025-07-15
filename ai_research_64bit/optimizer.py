@@ -13,7 +13,7 @@ from sklearn.metrics import precision_score, f1_score
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
 DATA_PATH = "C:/program trading system/data/strategy_training_data.parquet"
-MODEL_DIR = "C:/program trading system/models/custum_strategists"
+MODEL_DIR = "C:/program trading system/models/custom_strategists"
 RULES_DIR = "C:/program trading system/rules"
 
 try:

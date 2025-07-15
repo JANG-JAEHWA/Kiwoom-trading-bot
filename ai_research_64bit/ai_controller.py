@@ -9,8 +9,8 @@ WATCHLIST_PATH = os.path.join(PROJECT_ROOT, "watchlist.txt")
 UNIVERSAL_MODEL_PATH = os.path.join(PROJECT_ROOT, "models", "strategist_model_daily.joblib")
 CUSTOM_MODEL_DIR = os.path.join(PROJECT_ROOT, "models", "custom_stratgists")
 RULES_PATH = os.path.join(PROJECT_ROOT, "rules", "optimal_rules.json")
-LIVE_DIR_1MIN = os.path.join(PROJECT_ROOT, "data", "live_data")
-LIVE_DIR_3MIN = os.path.join(PROJECT_ROOT, "data", "live_data")
+LIVE_DIR_1MIN = os.path.join(PROJECT_ROOT, "data", "live_data_1min")
+LIVE_DIR_3MIN = os.path.join(PROJECT_ROOT, "data", "live_data_3min")
 HISTORICAL_DIR = os.path.join(PROJECT_ROOT, "data_3min")
 
 positions = {}
@@ -27,23 +27,34 @@ def load_data(path):
     except (FileNotFoundError, pd.errors.EmptyDataError): return None
 
 def get_signal(code, combined_df):
-    custom_model_path = os.path.join(CUSTOM_MODEL_DIR, f"strategist_{code}.joblib")
-
-    custom_model = None
-    try: custom_model = joblib.load(custom_model_path)
-    except FileNotFoundError: pass
-
     features_df = generate_features(combined_df.copy())
     if len(features_df) < 1: return "HOLD"
     features = ['volatility_1h', 'momentum_2h', 'volume_ratio', 'atr', 'roc', 'volatility_of_volatility', 'momentum_acceleration', 'vp_corr_1h']
     latest_features = features_df[features].iloc[[-1]]
     if latest_features.isnull().values.any(): return "HOLD"
 
-    if custom_model and custom_model.predict(latest_features)[0] == 1:
+    buy_signal_found = False
+
+    custom_model_path = os.path.join(CUSTOM_MODEL_DIR, f"strategist_{code}.joblib")
+    try:
+        custom_model = joblib.load(custom_model_path)
+        custom_proba = custom_model.predict_proba(latest_features)[:, 1][0]
+        print(f"-> 맞춤형 모델 판단 확률: {custom_proba*100:.2f}%")
+        if custom_proba >= 0.5:
+            buy_signal_found = True
+    except FileNotFoundError:
+        pass
+    if not buy_signal_found and UNIVERSAL_MODEL:
+        universal_proba = UNIVERSAL_MODEL.predict_proba(latest_features)[:, 1][0]
+        print(f"-> 범용 모델 판단 확률: {universal_proba*100:.2f}%")
+        if custom_proba >= 0.5:
+            buy_signal_found = True
+    if buy_signal_found:
         return "BUY"
-    if UNIVERSAL_MODEL and UNIVERSAL_MODEL.predict(latest_features)[0] == 1:
-        return "BUY"
-    return "HOLD"
+    else:
+        print(f"-> AI 최종 판단: HOLD")
+        return "HOLD"
+
 
 def send_signal(signal, code, qty, client_socket):
     if signal == ["BUY", "SELL"]:
