@@ -31,9 +31,7 @@ def run_updater():
         combined_df = pd.concat([existing_df, new_df]).drop_duplicates(subset=['date'], keep='last')
         combined_df = combined_df.sort_values(by='date', ascending=True)
         
-        today_str = datetime.now().strftime('%Y%m%d')
-        df_past = combined_df[combined_df['date'].astype(str).str.slice(0, 8) != today_str].copy()
-        df_past.to_csv(file_path, index=False, encoding='utf-8-sig')
+        combined_df.to_csv(file_path, index=False, encoding='utf-8-sig')
         print(f"-> 데이터 최신화 완료. (총 {len(new_df)}개)")
 
     print("\n\n모든 종목 데이터 최신화 완료.")
