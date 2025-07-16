@@ -20,18 +20,13 @@ def simulate_trade(close_prices, high_prices, low_prices, atr_values, start_inde
 
     end_index = min(start_index + 1 + max_holding_period, len(close_prices))
     for i in range(start_index + 1, end_index):
-        current_price = close_prices[i]
-        current_high = high_prices[i]
-        current_atr = atr_values[i]
-
-        highest_price_since_buy = max(highest_price_since_buy, current_high)
-        trailing_stop_price = highest_price_since_buy - (current_atr * atr_multiplier)
+        highest_price_since_buy = max(highest_price_since_buy, high_prices[i])
+        trailing_stop_price = highest_price_since_buy - (atr_values[i] * atr_multiplier)
         stop_loss_price = max(stop_loss_price, trailing_stop_price)
 
-        if current_price < stop_loss_price:
+        if low_prices[i] < stop_loss_price:
             return False
-    final_price = close_prices[end_index -1]
-    return final_price > entry_price
+    return True
 
 def label_data_with_atr_stop(group, atr_multiplier, max_holding_period):
     group['atr'] = ta.atr(high=group['high'], low=group['low'], close=group['close'], length=14)
@@ -45,7 +40,7 @@ def label_data_with_atr_stop(group, atr_multiplier, max_holding_period):
     targets = np.zeros(len(group), dtype=np.int32)
 
     if len(group) > max_holding_period + 14:
-        for i  in range(len(group) - max_holding_period - 1):
+        for i  in range(len(group) - max_holding_period):
             if simulate_trade(close_prices, high_prices, low_prices, atr_values, i, atr_multiplier, max_holding_period):
                 targets[i] = 1
     group['target'] = targets
@@ -56,7 +51,7 @@ def main():
 
     input_path = "C:/program trading system/data/market_summary.parquet"
     output_path = "C:/program trading system/data/strategy_training_data.parquet"
-    ATR_MULTIPLIER = 2.5
+    ATR_MULTIPLIER = 2.0
     MAX_HOLDING_PERIOD = 40
 
     try:
@@ -71,7 +66,7 @@ def main():
 
     labeled_df = labeled_df.reset_index(drop=True)
     labeled_df.dropna(inplace=True)
-    labeled_df.to_parquet(output_path)
+    labeled_df.to_parquet(output_path, index=False)
 
     print(f"\n라벨링 완료. 결과가 '{output_path}'에 저장되었습니다.")
     print(f"총 데이터 수: {len(labeled_df)}, 'BUY' 라벨 수: {labeled_df['target'].sum()}")
