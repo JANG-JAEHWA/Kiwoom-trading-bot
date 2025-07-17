@@ -6,6 +6,7 @@ from datetime import datetime
 from kiwoom_api_collector import KiwoomAPICollector
 from PyQt5.QtWidgets import QApplication
 import time
+from tqdm import tqdm
 
 def run_updater():
     app = QApplication(sys.argv)
@@ -16,16 +17,14 @@ def run_updater():
     data_dir = "C:/program trading system/data_3min"
     stock_files = [f for f in os.listdir(data_dir) if f.endswith('.csv')]
     
-    for i, file_name in enumerate(stock_files):
+    for file_name in tqdm(stock_files, desc="데이터 최신하 진행 중"):
         code = file_name.split('_')[0]
         file_path = os.path.join(data_dir, file_name)
-        print(f"\n[{i+1}/{len(stock_files)}] {code} 종목 최신화 시작...")
-        
         try:
             existing_df = pd.read_csv(file_path, dtype={'date': str})
             existing_dates = set(existing_df['date'])
         except Exception as e:
-            print(f"-> 파일 읽기 오류: {e}"); continue
+            tqdm.write(f"-> 파일 읽기 오류: {e}"); continue
         
         all_new_data = []
         is_gap_bridged = False

@@ -170,9 +170,9 @@ class MainWindow(QMainWindow):
         # 상태 메시지 설정
         status_message = f"현재시간: {now.toString('yyyy-MM-dd hh:mm:ss')}"
         if not self.monitor_button.isEnabled():
-            remaining_1min = 60 - now.time().second()
+            remaining_1min = 59 - now.time().second()
             remaining_3min_m = 2 - (now.time().minute() % 3)
-            remaining_3min_s = 60 - now.time().second()
+            remaining_3min_s = 59 - now.time().second()
 
             status_message += f" | 1분봉: {remaining_1min}초 후 | 3분봉: {remaining_3min_m}분 {remaining_3min_s}초 후"
             

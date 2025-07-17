@@ -62,7 +62,6 @@ def send_signal(signal, code, qty, client_socket):
             print(f"소켓 메시지 전송 실패: {e}")
 
 def monitor_for_entry(client_socket):
-    global stock_states
     print("--- 진입 감시 스레드 시작 (3분봉 기준) ---")
     last_mod_times = {}
     while True:
@@ -89,7 +88,7 @@ def monitor_for_entry(client_socket):
                 live_df = load_data(live_path)
                 if hist_df is None or live_df is None: continue
                     
-                combined_df = pd.concat([hist_df, live_df]).drop_duplicates(subset=['date'], keep='last')
+                combined_df = pd.concat([hist_df, live_df]).drop_duplicates(subset=['date'], keep='last').reset_index(drop=True)
                 if len(combined_df) < 101: continue
 
                 signal = get_signal(code, combined_df)
@@ -112,19 +111,22 @@ def monitor_for_execution(client_socket):
         try:
             codes_to_check = list(stock_states.keys())
             for code in codes_to_check:
-                state_info = stock_states.get(code, {})
-                status = state_info.get('status')
-                if status not in ['IN_POSITION', 'ENTRY_WINDOW_OPEN']: continue
                 live_path = os.path.join(LIVE_DIR_1MIN, f"live_{code}.csv")
                 if not os.path.exists(live_path): continue
+                
                 mod_time = os.path.getmtime(live_path)
                 if mod_time == last_mod_times.get(code): continue
+                
                 last_mod_times[code] = mod_time
                 live_df = load_data(live_path)
                 if live_df is None or live_df.empty: continue
-                current_price = live_df['close'].iloc[-1]
                 
+                current_price = live_df['close'].iloc[-1]
+
                 with data_lock:
+                    state_info = stock_states.get(code, {})
+                    status = state_info.get('status')
+
                     if status == 'IN_POSITION':
                         pos = positions.get(code)
                         if not pos: continue
@@ -140,17 +142,18 @@ def monitor_for_execution(client_socket):
                             print(f"-> 청산 신호 (1분봉): [{code}] SELL")
                             send_signal("SELL", code, pos['qty'], client_socket)
                             if code in positions: del positions[code]
-                            stock_states[code]['status'] = 'WATCHING'
+                            state_info['status'] = 'WATCHING'
 
                     elif status == 'ENTRY_WINDOW_OPEN':
                         if time.time() > state_info.get('window_expires_at', 0):
                             print(f"[{code}] 공격 시간 초과. 정찰 모드로 복귀.")
-                            stock_states[code]['status'] = 'WATCHING'; continue
+                            state_info['status'] = 'WATCHING'; continue
+                        
                         print(f"-> 정밀 타격 실행 (1분봉): [{code}] BUY")
                         buy_qty = int(1_000_000 / current_price)
                         if buy_qty > 0:
                             send_signal("BUY", code, buy_qty, client_socket)
-                            stock_states[code]['status'] = 'IN_POSITION'
+                            state_info['status'] = 'IN_POSITION'
                             hist_df = load_data(os.path.join(HISTORICAL_DIR, f"{code}_3min_data.csv"))
                             combined_df = pd.concat([hist_df, live_df]).drop_duplicates(['date'], keep='last').reset_index(drop=True)
                             current_atr = ta.atr(combined_df['high'], combined_df['low'], combined_df['close'], length=14).iloc[-1]
