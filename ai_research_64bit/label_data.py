@@ -6,12 +6,20 @@ tqdm.pandas()
 
 def create_labels(df_group):
     """데이터에서 미래의 주가를 보고 정답을 계산하는 함수"""
-    feature_highs = df_group['high'].rolling(window=40, min_periods=1).max().shift(-40)
+    PROFIT_TARGET = 0.033
+    STOP_LOSS_TARGET = -0.02
+    HOLDING_PERIOD = 40
 
-    feature_returns = (feature_highs -df_group['close']) / df_group['close']
+    future_highs = df_group['high'].rolling(window=HOLDING_PERIOD, min_periods=1).max().shift(-HOLDING_PERIOD)
+    future_lows = df_group['low'].rolling(window=HOLDING_PERIOD, min_periods=1).max().shift(-HOLDING_PERIOD)
+    
+    profit_price = df_group['close'] * (1 + PROFIT_TARGET)
+    stop_loss_price = df_group['close'] * (1 + STOP_LOSS_TARGET)
 
-    df_group['target'] = (feature_returns >= 0.033).astype(int)
-
+    profit_reached = future_highs >= profit_price
+    stop_loss_reached = future_lows <= stop_loss_price
+ 
+    df_group['target'] = np.where(profit_reached & ~stop_loss_reached, 1, 0)
     return df_group
 
 def run_labeling():
