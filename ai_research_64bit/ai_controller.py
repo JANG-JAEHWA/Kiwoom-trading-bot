@@ -6,7 +6,7 @@ from threading import Thread, Lock
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 WATCHLIST_PATH = os.path.join(PROJECT_ROOT, "watchlist.txt")
-UNIVERSAL_MODEL_PATH = os.path.join(PROJECT_ROOT, "models", "strategist_model_daily.joblib")
+UNIVERSAL_MODEL_PATH = os.path.join(PROJECT_ROOT, "models", "strategist_model_v1.joblib")
 CUSTOM_MODELS_DIR = os.path.join(PROJECT_ROOT, "models", "custom_stratgists")
 RULES_PATH = os.path.join(PROJECT_ROOT, "rules", "optimal_rules.json")
 LIVE_DIR_1MIN = os.path.join(PROJECT_ROOT, "data", "live_data_1min")
@@ -72,9 +72,9 @@ def monitor_for_entry(client_socket):
                 time.sleep(5)
                 continue
             for code in watchlist:
+                if code in positions: continue
                 with data_lock:
                     if stock_states.get(code, {}).get('status') != 'WATCHING' : continue
-                if code in positions: continue
 
                 live_path = os.path.join(LIVE_DIR_3MIN, f"live_{code}.csv")
                 if not os.path.exists(live_path): continue
@@ -110,57 +110,52 @@ def monitor_for_execution(client_socket):
 
     while True:
         try:
-            all_monitored_codes = list(stock_states.keys())
-            for code in all_monitored_codes:
+            codes_to_check = list(stock_states.keys())
+            for code in codes_to_check:
+                state_info = stock_states.get(code, {})
+                status = state_info.get('status')
+                if status not in ['IN_POSITION', 'ENTRY_WINDOW_OPEN']: continue
                 live_path = os.path.join(LIVE_DIR_1MIN, f"live_{code}.csv")
                 if not os.path.exists(live_path): continue
-
                 mod_time = os.path.getmtime(live_path)
                 if mod_time == last_mod_times.get(code): continue
-
                 last_mod_times[code] = mod_time
                 live_df = load_data(live_path)
-                if live_path is None or live_df.empty: continue
+                if live_df is None or live_df.empty: continue
                 current_price = live_df['close'].iloc[-1]
-
-                pos = positions.get(code)
-                if not pos: continue
-
+                
                 with data_lock:
-                    state_info = stock_states.get(code, {})
-                    if state_info.get('status') == 'IN_POSITION':
+                    if status == 'IN_POSITION':
                         pos = positions.get(code)
                         if not pos: continue
                         live_df['atr'] = ta.atr(live_df['high'], live_df['low'], live_df['close'], length=14)
                         current_atr = live_df['atr'].iloc[-1]
+                        if pd.isna(current_atr) or current_atr == 0: continue
                         atr_multiplier = optimal_rules.get(code, {}).get('atr_multiplier', 2.5)
                         pos['highest_price'] = max(pos['highest_price'], current_price)
-                        trailing_stop_price = pos['highest_price'] - (current_atr * atr_multiplier)
-                        pos['stop_loss_price'] = max(pos['stop_loss_price'], trailing_stop_price)
-                        is_time_to_exit = datetime.now().time() >= datetime.time(15, 20)
+                        pos['stop_loss_price'] = max(pos.get('stop_loss_price', 0), pos['highest_price'] - (current_atr * atr_multiplier))
+                        now_time_str = datetime.now().strftime('%H%M')
+                        is_time_to_exit = now_time_str >= "1520"
                         if current_price < pos['stop_loss_price'] or is_time_to_exit:
-                            print(f"-> AI 판단 (1분봉): [{code}] SELL (청산)")
+                            print(f"-> 청산 신호 (1분봉): [{code}] SELL")
                             send_signal("SELL", code, pos['qty'], client_socket)
                             if code in positions: del positions[code]
-                            state_info['status'] = 'WATCHING'
-                    elif state_info.get('status') == 'ENTRY_WINDOW_OPEN':
+                            stock_states[code]['status'] = 'WATCHING'
+
+                    elif status == 'ENTRY_WINDOW_OPEN':
                         if time.time() > state_info.get('window_expires_at', 0):
                             print(f"[{code}] 공격 시간 초과. 정찰 모드로 복귀.")
-                            state_info['status'] = 'WATCHING'
-                            continue
-                        
-                        # (여기서 더 정교한 1분봉 타점 로직을 추가할 수 있습니다. 지금은 즉시 매수)
-                        print(f"-> AI 판단 (1분봉): [{code}] 정밀 타격 실행!")
+                            stock_states[code]['status'] = 'WATCHING'; continue
+                        print(f"-> 정밀 타격 실행 (1분봉): [{code}] BUY")
                         buy_qty = int(1_000_000 / current_price)
                         if buy_qty > 0:
                             send_signal("BUY", code, buy_qty, client_socket)
-                            state_info['status'] = 'IN_POSITION'
+                            stock_states[code]['status'] = 'IN_POSITION'
                             hist_df = load_data(os.path.join(HISTORICAL_DIR, f"{code}_3min_data.csv"))
                             combined_df = pd.concat([hist_df, live_df]).drop_duplicates(['date'], keep='last').reset_index(drop=True)
                             current_atr = ta.atr(combined_df['high'], combined_df['low'], combined_df['close'], length=14).iloc[-1]
                             atr_multiplier = optimal_rules.get(code, {}).get('atr_multiplier', 2.5)
                             positions[code] = {'qty': buy_qty, 'entry_price': current_price, 'highest_price': current_price, 'stop_loss_price': current_price - (current_atr * atr_multiplier)}
-                            print(f"-> 포지션 기록 완료: {positions[code]}")
             time.sleep(1)
         except Exception as e: print(f"\n실행/청산 감시 오류: {e}"); time.sleep(1)
         

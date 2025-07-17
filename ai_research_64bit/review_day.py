@@ -54,7 +54,7 @@ def review_stock_performance(code, universal_model):
 
 if __name__ == "__main__":
     try:
-        universal_model_path = "C:/program trading system/models/strategist_model_daily.joblib"
+        universal_model_path = "C:/program trading system/models/strategist_model_v1.joblib"
         universal_model = joblib.load(universal_model_path)
         print("범용 AI 전략가 모델 로드 성공.")
     except FileNotFoundError:

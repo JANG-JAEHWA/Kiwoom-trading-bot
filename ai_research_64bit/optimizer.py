@@ -35,8 +35,8 @@ def optimize_for_stock(code):
         return
     
     print(f"\n--- 1. [{code}] 진입 전략 (AI 모델) 최적화 중...")
-    best_model = find_best_entry_model(stock_df)
-    if best_model is None:
+    best_model, best_f1_score = find_best_entry_model(stock_df)
+    if best_model is None or best_f1_score < 0.1:
         print(f"[{code}] 최적의 진입 모델을 찾지 못했습니다.")
         return
     
@@ -52,7 +52,8 @@ def optimize_for_stock(code):
 def find_best_entry_model(stock_df):
     features = ['volatility_1h', 'momentum_2h', 'volume_ratio', 'atr', 'roc', 'volatility_of_volatility', 'momentum_acceleration', 'vp_corr_1h']
     X, y = stock_df[features], stock_df['target']
-    X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.3, random_state=42, stratify=y)
+    train_size = int(len(X) * 0.7)
+    X_train, X_val, y_train, y_val = X[:train_size], X[train_size:], y[:train_size], y[train_size:]
 
     def objective(trial):
         params = {
@@ -71,10 +72,14 @@ def find_best_entry_model(stock_df):
         return f1_score(y_val, preds)
 
     study = optuna.create_study(direction='maximize')
-    study.optimize(objective, n_trials=50, show_progress_bar=True)
-
-    best_model = lgb.LGBMClassifier(**study.best_params).fit(X, y)
-    return best_model
+    study.optimize(objective, n_trials=100, show_progress_bar=True)
+    try:
+        best_params = study.best_params    
+        best_model = lgb.LGBMClassifier(**study.best_params, device='gpu').fit(X, y)
+        return best_model, study.best_value
+    except ValueError:
+        print("-> 모든 시도가 실패하여, 이 종목에 대한 최적 모델을 찾지 못했습니다.")
+        return None, 0
 
 def find_best_exit_rule(stock_df, model):
     def backtest_objective(trial):

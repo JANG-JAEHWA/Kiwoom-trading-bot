@@ -8,7 +8,7 @@ import numba
 tqdm.pandas()
 
 @numba.jit(nopython=True)
-def simulate_trade(close_prices, high_prices, low_prices, atr_values, start_index, atr_multiplier, max_holding_period):
+def simulate_trade(close_prices, high_prices, low_prices, atr_values, start_index, atr_multiplier, max_holding_period, profit_target):
     entry_price = close_prices[start_index]
     entry_atr = atr_values[start_index]
 
@@ -26,9 +26,10 @@ def simulate_trade(close_prices, high_prices, low_prices, atr_values, start_inde
 
         if low_prices[i] < stop_loss_price:
             return False
-    return True
+    final_price = close_prices[end_index -1]
+    return final_price > entry_price * (1 + profit_target)
 
-def label_data_with_atr_stop(group, atr_multiplier, max_holding_period):
+def label_data_with_atr_stop(group, atr_multiplier, max_holding_period, profit_target):
     group['atr'] = ta.atr(high=group['high'], low=group['low'], close=group['close'], length=14)
     group.dropna(inplace=True)
 
@@ -41,7 +42,7 @@ def label_data_with_atr_stop(group, atr_multiplier, max_holding_period):
 
     if len(group) > max_holding_period + 14:
         for i  in range(len(group) - max_holding_period):
-            if simulate_trade(close_prices, high_prices, low_prices, atr_values, i, atr_multiplier, max_holding_period):
+            if simulate_trade(close_prices, high_prices, low_prices, atr_values, i, atr_multiplier, max_holding_period, profit_target):
                 targets[i] = 1
     group['target'] = targets
     return group
@@ -53,6 +54,7 @@ def main():
     output_path = "C:/program trading system/data/strategy_training_data.parquet"
     ATR_MULTIPLIER = 2.0
     MAX_HOLDING_PERIOD = 40
+    PROFIT_TARGET = 0.02
 
     try:
         df = pd.read_parquet(input_path)
@@ -62,7 +64,7 @@ def main():
     
     print(f"총 {df['code'].nunique()}개 종목에 대해 라벨링을 진행합니다...")
 
-    labeled_df = df.groupby('code').progress_apply(lambda x : label_data_with_atr_stop(x, ATR_MULTIPLIER, MAX_HOLDING_PERIOD))
+    labeled_df = df.groupby('code').progress_apply(lambda x : label_data_with_atr_stop(x, ATR_MULTIPLIER, MAX_HOLDING_PERIOD, PROFIT_TARGET))
 
     labeled_df = labeled_df.reset_index(drop=True)
     labeled_df.dropna(inplace=True)

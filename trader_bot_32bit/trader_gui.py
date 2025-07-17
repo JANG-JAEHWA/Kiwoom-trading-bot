@@ -4,7 +4,7 @@ import subprocess
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QWidget,
                              QPushButton, QTextEdit, QLabel, QLineEdit, QHBoxLayout)
 from PyQt5.QtCore import  QThread, pyqtSignal, QTimer, QDateTime
-from kiwoom_api import KiwoomAPI
+from kiwoom_api_trader import KiwoomAPI
 import pandas as pd
 import socket
 import csv
@@ -23,15 +23,13 @@ class SignalServerThread(QThread):
                 server_socket.bind(('127.0.0.1', 9999))
                 server_socket.listen()
                 print("[Signal Server] AI 컨트롤러의 접속을 기다립나다...")
-                conn, addr = server_socket.accept()
-                with conn:
-                    print(f"[Signal_Server] AI 컨트롤러의 접속: {addr}")
-                    while self.is_running:
+                while self.is_running:
+                    conn, addr = server_socket.accept()
+                    with conn:
+                        print(f"[Signal Server] AI 컨트롤러 재접속: {addr}")
                         data = conn.recv(1024)
-                        if not data:
-                            break
-                        message = data.decode()
-                        self.order_signal.emit(message)
+                        if not data: continue
+                        self.order_signal.emit(data.decode())
         except Exception as e:
             print(f"[Signal Server] 오류 발생: {e}")
         
@@ -53,7 +51,9 @@ class KiwoomWorker(QThread):
         elif self.task == "monitor":
             codes_str = self.kwargs.get("codes_str")
             self.kiwoom.subscribe_realtime_data("0101", codes_str)
-            self.exec_()
+            self.exec_() # 실시간 이벤트를 계속 받기 위해 이벤트 루프 실행
+        elif self.task == "order":
+            self.kiwoom.send_order(**self.kwargs)
                  
 
 class MainWindow(QMainWindow):
@@ -62,6 +62,7 @@ class MainWindow(QMainWindow):
         self.kiwoom = KiwoomAPI()
         self.worker = None
         self.ai_process = None
+        self.order_workers = []
 
         self.signal_server = SignalServerThread()
         self.signal_server.order_signal.connect(self.on_ai_signal_received)
@@ -196,19 +197,27 @@ class MainWindow(QMainWindow):
 
     def on_ai_signal_received(self, message):
         try:
-            parts = message.split(',')
-            if len(parts) == 3:
-                signal, code, qty_str = parts
-                qty = int(qty_str)
-                self.update_log(f"!!! [직통 신호] {code} 종목, {qty}주 {signal} 주문 실행!!!")
-                order_type = 1 if signal == "BUY_Custom" or "BUY_Universal" else 2
-                order_kwargs = {
-                    "rqname": f"AIBot_{signal}_{code}", "screen_no": "0101",
+            self.update_log(f"!!! [직통 신호] {message} 수신 !!!")
+            signal, code, qty_str = message.split(',')
+            qty = int(qty_str)
+            
+            if "BUY" in signal:
+                order_type = 1 # 신규매수
+            elif "SELL" in signal:
+                order_type = 2 # 신규매도
+            else:
+                self.update_log(f"알 수 없는 신호 타입: {signal}"); return
+                
+            # 주문 실행을 위한 워커 생성
+            order_kwargs = {
+                "rqname": f"AIBot_{signal}_{code}", "screen_no": "0101",
                     "acc_no": self.kiwoom.account_number, "order_type": order_type,
-                    "code": code, "qty": qty, "price": 0, "hoga_gb": "03" # 시장가 주문
-                }
-                worker = KiwoomWorker(self.kiwoom, "order", **order_kwargs)
-                worker.start()
+                    "code": code, "qty": qty, "price": 0, "hoga_gb": "03",
+                    "org_order_no": ""
+            }
+            order_worker = KiwoomWorker(self.kiwoom, "order", **order_kwargs)
+            order_worker.start()
+            self.order_workers.append(order_worker)
         except Exception as e:
             self.update_log(f"신호 처리 중 오류: {e}")
         

@@ -2,7 +2,7 @@ import os
 import sys
 import pandas as pd
 from datetime import datetime
-from kiwoom_api import KiwoomAPI
+from kiwoom_api_collector import KiwoomAPI
 from PyQt5.QtWidgets import QApplication
 import time
 
