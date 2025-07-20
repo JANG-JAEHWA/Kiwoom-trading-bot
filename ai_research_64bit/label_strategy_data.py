@@ -8,7 +8,7 @@ tqdm.pandas()
 def create_simple_labels(df_group):
     PROFIT_TARGET = 0.015
     STOP_LOSS_TARGET = -0.01
-    HOLDING_PERIOD = 40
+    HOLDING_PERIOD = 60
 
     future_highs = df_group['high'].rolling(window=HOLDING_PERIOD, min_periods=1).max().shift(-HOLDING_PERIOD)
     future_lows = df_group['low'].rolling(window=HOLDING_PERIOD, min_periods=1).min().shift(-HOLDING_PERIOD)

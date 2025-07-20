@@ -6,7 +6,7 @@ from threading import Thread, Lock
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 WATCHLIST_PATH = os.path.join(PROJECT_ROOT, "watchlist.txt")
-UNIVERSAL_MODEL_PATH = os.path.join(PROJECT_ROOT, "models", "strategist_model_daily.joblib")
+UNIVERSAL_MODEL_PATH = os.path.join(PROJECT_ROOT, "models", "universal_strategist_optimized")
 CUSTOM_MODELS_DIR = os.path.join(PROJECT_ROOT, "models", "custom_stratgists")
 LIVE_DIR_1MIN = os.path.join(PROJECT_ROOT, "data", "live_data_1min")
 LIVE_DIR_3MIN = os.path.join(PROJECT_ROOT, "data", "live_data_3min")
