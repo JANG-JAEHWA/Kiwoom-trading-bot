@@ -1,60 +1,33 @@
 import pandas as pd
 import numpy as np
-import pandas_ta as ta
 from tqdm import tqdm
 import os
-import numba
 
 tqdm.pandas()
 
-@numba.jit(nopython=True)
-def simulate_trade(close_prices, high_prices, low_prices, atr_values, start_index, atr_multiplier, max_holding_period, profit_target):
-    entry_price = close_prices[start_index]
-    entry_atr = atr_values[start_index]
+def create_simple_labels(df_group):
+    PROFIT_TARGET = 0.015
+    STOP_LOSS_TARGET = -0.01
+    HOLDING_PERIOD = 40
 
-    if np.isnan(entry_atr) or entry_atr == 0:
-        return False
-    
-    stop_loss_price = entry_price - (entry_atr * atr_multiplier)
-    highest_price_since_buy = entry_price
+    future_highs = df_group['high'].rolling(window=HOLDING_PERIOD, min_periods=1).max().shift(-HOLDING_PERIOD)
+    future_lows = df_group['low'].rolling(window=HOLDING_PERIOD, min_periods=1).min().shift(-HOLDING_PERIOD)
 
-    end_index = min(start_index + 1 + max_holding_period, len(close_prices))
-    for i in range(start_index + 1, end_index):
-        highest_price_since_buy = max(highest_price_since_buy, high_prices[i])
-        trailing_stop_price = highest_price_since_buy - (atr_values[i] * atr_multiplier)
-        stop_loss_price = max(stop_loss_price, trailing_stop_price)
+    profit_price = df_group['close'] * (1 + PROFIT_TARGET)
+    stop_loss_price = df_group['close'] * (1 + STOP_LOSS_TARGET)
 
-        if low_prices[i] < stop_loss_price:
-            return False
-    final_price = close_prices[end_index -1]
-    return final_price > entry_price * (1 + profit_target)
+    profit_reached = future_highs >= profit_price
+    stop_loss_reached = future_lows <= stop_loss_price
 
-def label_data_with_atr_stop(group, atr_multiplier, max_holding_period, profit_target):
-    group['atr'] = ta.atr(high=group['high'], low=group['low'], close=group['close'], length=14)
-    group.dropna(inplace=True)
+    df_group['target'] = np.where(profit_reached & ~stop_loss_reached, 1, 0)
 
-    close_prices = group['close'].to_numpy()
-    high_prices = group['high'].to_numpy()
-    low_prices = group['low'].to_numpy()
-    atr_values = group['atr'].to_numpy()
-
-    targets = np.zeros(len(group), dtype=np.int32)
-
-    if len(group) > max_holding_period + 14:
-        for i  in range(len(group) - max_holding_period):
-            if simulate_trade(close_prices, high_prices, low_prices, atr_values, i, atr_multiplier, max_holding_period, profit_target):
-                targets[i] = 1
-    group['target'] = targets
-    return group
+    return df_group
 
 def main():
-    print("--- ATR 트레일링 스톱 기반 전략 데이터 라벨링 사작 ---")
+    print("--- 단순 규칙 기반 전략 데이터 라벨링 사작 ---")
 
     input_path = "C:/program trading system/data/market_summary.parquet"
     output_path = "C:/program trading system/data/strategy_training_data.parquet"
-    ATR_MULTIPLIER = 2.0
-    MAX_HOLDING_PERIOD = 40
-    PROFIT_TARGET = 0.02
 
     try:
         df = pd.read_parquet(input_path)
@@ -64,10 +37,11 @@ def main():
     
     print(f"총 {df['code'].nunique()}개 종목에 대해 라벨링을 진행합니다...")
 
-    labeled_df = df.groupby('code').progress_apply(lambda x : label_data_with_atr_stop(x, ATR_MULTIPLIER, MAX_HOLDING_PERIOD, PROFIT_TARGET))
+    labeled_df = df.groupby('code').progress_apply(create_simple_labels)
 
     labeled_df = labeled_df.reset_index(drop=True)
     labeled_df.dropna(inplace=True)
+
     labeled_df.to_parquet(output_path, index=False)
 
     print(f"\n라벨링 완료. 결과가 '{output_path}'에 저장되었습니다.")

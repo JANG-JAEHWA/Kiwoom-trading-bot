@@ -6,8 +6,8 @@ tqdm.pandas()
 
 def create_labels(df_group):
     """데이터에서 미래의 주가를 보고 정답을 계산하는 함수"""
-    PROFIT_TARGET = 0.033
-    STOP_LOSS_TARGET = -0.02
+    PROFIT_TARGET = 0.015
+    STOP_LOSS_TARGET = -0.01
     HOLDING_PERIOD = 40
 
     future_highs = df_group['high'].rolling(window=HOLDING_PERIOD, min_periods=1).max().shift(-HOLDING_PERIOD)

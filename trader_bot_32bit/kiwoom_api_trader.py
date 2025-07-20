@@ -78,7 +78,7 @@ class KiwoomAPI(QObject):
                 candles[code] = {'start_time': None, 'data': {}}
 
             candle_info = candles[code]
-            if candle_info['start_time'] is None or window_start_qtime > candle_info['start_time']:
+            if candle_info['start_time'] is None or start_time > candle_info['start_time']:
                 if candle_info['data']:
                     signal_emitter.emit(candle_info['data'])
                 candle_info['start_time'] = start_time
