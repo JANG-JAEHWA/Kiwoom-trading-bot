@@ -17,7 +17,7 @@ def get_best_params_from_db():
         print(f"Optuna DB 로딩 실패: {e}")
         print("기본 하이퍼파라미터를 사용합니다.")
         return {
-            'device': 'gpu',
+            #'device': 'gpu',
             'random_state': 42
         }
         
@@ -25,7 +25,7 @@ def train_and_recommend_daily():
     print("--- AI 스카우터 훈련 및 추천 시작---")
 
     best_params = get_best_params_from_db()
-    best_params['device'] = 'gpu'
+    #best_params['device'] = 'gpu'
     best_params['random_state'] = 42
     best_params['min_gain_to_split'] = 1e-6
     best_params['min_child_weight'] = 1e-3
@@ -73,8 +73,11 @@ def train_and_recommend_daily():
                 for code in top_candidate_code:
                     f.write(f"{code}\n")
     else:
-        print(recommended_stocks[['code', 'recommend_proba']].head(10))
-        recommended_codes = recommended_stocks['code'].tolist()
+        top_10_stocks = recommended_stocks.head(10)
+        
+        print(top_10_stocks[['code', 'recommend_proba']])
+        
+        recommended_codes = top_10_stocks['code'].tolist()
         with open(watchlist_path, "w") as f:
             for code in recommended_codes:
                 f.write(f"{code}\n")

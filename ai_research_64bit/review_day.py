@@ -31,7 +31,10 @@ def review_stock_performance(code, universal_model):
     
     print("-> 힌트 및 AI 판단 확률을 계산합니다...")
     features_df = generate_features(combined_df.copy())
-    features = ['volatility_1h', 'momentum_2h', 'volume_ratio', 'atr', 'roc', 'volatility_of_volatility', 'momentum_acceleration', 'vp_corr_1h']
+    features = [
+    'volatility_1h', 'momentum_2h',
+    'volatility_ratio', 'volume_weighted_momentum'
+    ]
 
     result_df = features_df.copy()
 
