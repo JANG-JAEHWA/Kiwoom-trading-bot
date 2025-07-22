@@ -38,8 +38,10 @@ def main():
     try: df = pd.read_parquet(DATA_PATH)
     except FileNotFoundError: print(f"오류: '{DATA_PATH}' 파일을 찾을 수 없습니다."); return
     
-    features = ['volatility_1h', 'momentum_2h', 'volume_ratio', 'atr', 'roc',
-                'volatility_of_volatility', 'momentum_acceleration', 'vp_corr_1h']
+    features = [
+    'volatility_1h', 'momentum_2h',
+    'volatility_ratio', 'volume_weighted_momentum'
+    ]
     X, y = df[features], df['target']
 
     train_size = int(len(X) * 0.7)

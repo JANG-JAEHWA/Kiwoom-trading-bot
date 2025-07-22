@@ -31,7 +31,10 @@ def get_signal(code, combined_df):
     
     features_df = generate_features(combined_df.copy())
     if features_df.empty: return "HOLD"
-    features = ['volatility_1h', 'momentum_2h', 'volume_ratio', 'atr', 'roc', 'volatility_of_volatility', 'momentum_acceleration', 'vp_corr_1h']
+    features = [
+    'volatility_1h', 'momentum_2h',
+    'volatility_ratio', 'volume_weighted_momentum'
+    ]
     latest_features = features_df[features].iloc[[-1]]
     if latest_features.isnull().values.any(): return "HOLD"
     

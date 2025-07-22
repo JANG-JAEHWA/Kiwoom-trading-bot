@@ -40,7 +40,10 @@ def train_and_recommend_daily():
         print(f"오류: 최종 학습 데이터를 찾을 수 없습니다: {data_path}")
         return
 
-    features = ['volatility_1h', 'momentum_2h', 'volume_ratio', 'atr', 'roc', 'volatility_of_volatility', 'momentum_acceleration', 'vp_corr_1h']
+    features = [
+    'volatility_1h', 'momentum_2h',
+    'volatility_ratio', 'volume_weighted_momentum'
+    ]
     X = df[features]
     y = df['target']
 
