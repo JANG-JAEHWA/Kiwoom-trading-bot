@@ -17,24 +17,29 @@ class SignalServerThread(QThread):
         super().__init__()
         self.is_running = True
     
-    def run(self):
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
-                server_socket.bind(('127.0.0.1', 9999))
-                server_socket.listen()
-                print("[Signal Server] AI 컨트롤러의 접속을 기다립나다...")
+    def run(self):   
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(('127.0.0.1', 9999)); s.listen()
+            print("[Signal Server] AI 컨트롤러의 접속을 기다립니다...")
+            conn, addr = s.accept()
+            with conn:
+                print(f"[Signal Server] AI 컨트롤러 접속: {addr}")
                 while self.is_running:
-                    conn, addr = server_socket.accept()
-                    with conn:
-                        print(f"[Signal Server] AI 컨트롤러 재접속: {addr}")
+                    try:
                         data = conn.recv(1024)
-                        if not data: continue
-                        self.order_signal.emit(data.decode())
-        except Exception as e:
-            print(f"[Signal Server] 오류 발생: {e}")
+                        if not data: break
+                        message = data.decode()
+                        self.order_signal.emit(message)
+                    except ConnectionAbortedError: break # 클라이언트가 연결을 끊으면 루프 종료
+        print("[Signal Server] 연결이 종료되었습니다.")
         
     def stop(self):
         self.is_running = False
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.connect(('127.0.0.1', 9999))
+        except ConnectionRefusedError:
+            pass
 
 
 class KiwoomWorker(QThread):
@@ -200,6 +205,13 @@ class MainWindow(QMainWindow):
             self.update_log(f"!!! [직통 신호] {message} 수신 !!!")
             signal, code, qty_str = message.split(',')
             qty = int(qty_str)
+
+            trade_info = {
+                "주문유형": "매수" if "BUY" in signal else "매도",
+                "종목코드": code,
+                "체결수량": qty
+            }
+            self.log_trade(trade_info)
             
             if "BUY" in signal:
                 order_type = 1 # 신규매수
