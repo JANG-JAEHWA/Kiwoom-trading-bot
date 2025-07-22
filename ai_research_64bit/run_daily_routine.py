@@ -6,7 +6,7 @@ def run_script(script_path, python_executable):
     try:
         print(f"\n--- [실행 시작] {os.path.basename(script_path)} ---")
         script_dir = os.path.dirname(script_path)
-        result = subprocess.run([python_executable, script_path], check=True, cwd=script_dir)
+        subprocess.run([python_executable, script_path], check=True, cwd=script_dir)
         print(f"\n--- [실행 성공] {os.path.basename(script_path)} ---")
         return True
     except subprocess.CalledProcessError as e:
@@ -32,7 +32,7 @@ def main():
         "스카우터 라벨링": (os.path.join(project_root, "ai_research_64bit", "label_data.py"), py64_path),
         "스카우터 훈련": (os.path.join(project_root, "ai_research_64bit", "train_scout_daily.py"), py64_path),
         "전략가 라벨링": (os.path.join(project_root, "ai_research_64bit", "label_strategy_data.py"), py64_path),
-        "전략가 및 atr 배수 찾기훈련": (os.path.join(project_root, "ai_research_64bit", "optimizer.py"), py64_path),
+        "전략가 및 atr 배수 찾기훈련": (os.path.join(project_root, "ai_research_64bit", "train_strategist_daily.py"), py64_path),
     }
 
     for task_name, (script_path, python_exec) in scripts_to_run.items():

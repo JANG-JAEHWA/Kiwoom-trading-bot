@@ -60,7 +60,7 @@ def main():
         'metric': 'binary_logloss',
         'verbosity': -1,
         'boosting_type': 'gbdt',
-        'device': 'gpu',
+        'n_jobs': -1,
         'random_state': 42,
         'scale_pos_weight': scale_pos_weight,
         'n_estimators': 1000,
@@ -72,6 +72,16 @@ def main():
 
     final_model = lgb.LGBMClassifier(**safe_params)
     final_model.fit(pd.concat([X_train, X_val]), pd.concat([y_train, y_val]))
+
+    print("\n"+ "="*50)
+    print("      AI가 생각하는 '핵심 힌트' 순위")
+    print("="*50)
+
+    features_importance = pd.DataFrame({
+        'feature': features,
+        'importance': final_model.feature_importances_
+    }).sort_values('importance', ascending=False)
+    print(features_importance.to_string(index=False))
 
     joblib.dump(final_model, MODEL_PATH)
     print(f"\n최적화된 범용 AI 모델을 '{MODEL_PATH}'에 저장했습니다.")

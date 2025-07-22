@@ -26,27 +26,18 @@ def load_data(path):
     except (FileNotFoundError, pd.errors.EmptyDataError): return None
 
 def get_signal(code, combined_df):
+    if UNIVERSAL_MODEL is None:
+        return "HOLD"
+    
     features_df = generate_features(combined_df.copy())
     if features_df.empty: return "HOLD"
     features = ['volatility_1h', 'momentum_2h', 'volume_ratio', 'atr', 'roc', 'volatility_of_volatility', 'momentum_acceleration', 'vp_corr_1h']
     latest_features = features_df[features].iloc[[-1]]
     if latest_features.isnull().values.any(): return "HOLD"
-
-    # 맞춤형 모델 예측
-    try:
-        custom_model = joblib.load(os.path.join(CUSTOM_MODELS_DIR, f"strategist_{code}.joblib"))
-        custom_proba = custom_model.predict_proba(latest_features)[:, 1][0]
-        print(f"-> [{code}] 맞춤형 모델 판단: {custom_proba*100:.2f}%")
-        if custom_proba >= 0.5: return "BUY"
-    except FileNotFoundError: pass
-
-    # 범용 모델 예측
-    if UNIVERSAL_MODEL:
-        universal_proba = UNIVERSAL_MODEL.predict_proba(latest_features)[:, 1][0]
-        print(f"-> [{code}] 범용 모델 판단: {universal_proba*100:.2f}%")
-        if universal_proba >= 0.5: return "BUY"
-            
-    return "HOLD"
+    
+    proba = UNIVERSAL_MODEL.predict_proba(latest_features)[:, 1][0]
+    print(f"-> [{code}] 범용 모델 판단 확률: {proba*100:.2f}%")
+    return "BUY" if proba >= 0.5 else "HOLD"
 
 
 def send_signal(signal, code, qty, client_socket):
