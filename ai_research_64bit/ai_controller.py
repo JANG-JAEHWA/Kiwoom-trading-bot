@@ -6,7 +6,7 @@ from threading import Thread, Lock
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 WATCHLIST_PATH = os.path.join(PROJECT_ROOT, "watchlist.txt")
-UNIVERSAL_MODEL_PATH = os.path.join(PROJECT_ROOT, "models", "universal_strategist_optimized")
+UNIVERSAL_MODEL_PATH = os.path.join(PROJECT_ROOT, "models", "universal_strategist_optimized.joblib")
 CUSTOM_MODELS_DIR = os.path.join(PROJECT_ROOT, "models", "custom_stratgists")
 LIVE_DIR_1MIN = os.path.join(PROJECT_ROOT, "data", "live_data_1min")
 LIVE_DIR_3MIN = os.path.join(PROJECT_ROOT, "data", "live_data_3min")
@@ -52,11 +52,9 @@ def get_signal(code, combined_df):
 def send_signal(signal, code, qty, client_socket):
     if signal in ["BUY", "SELL"]:
         try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.connect(('127.0.0.1', 9999))
-                message = f"{signal},{code},{qty}"
-                s.sendall(message.encode())
-                print(f"!!![{code}] 주문 신호 전송: {signal} {qty}주 !!!")
+            message = f"{signal},{code},{qty}"
+            client_socket.sendall(message.encode())
+            print(f"!!![{code}] 주문 신호 전송: {signal} {qty}주 !!!")
         except Exception as e:
             print(f"소켓 메시지 전송 실패: {e}")
 
@@ -126,18 +124,18 @@ def run_ai_controller():
         print(f"GUI 통신 서버 접속 실패: {e}")
         return
 
-    global stock_states
     try:
         with open(WATCHLIST_PATH, 'r') as f:
             watchlist = [line.strip() for line in f if line.strip()]
-        for code in watchlist:
-            stock_states[code] = {'status': 'WATCHING'}
-        print(f"초기 감시 대상 설정: {list(stock_states.keys())}")
+        
     except FileNotFoundError: print(f"{WATCHLIST_PATH}를 찾을 수 없습니다."); return
 
     trade_monitor_thread = Thread(target=monitor_trades, args=(client_socket,), daemon=True)
     trade_monitor_thread.start()
     trade_monitor_thread.join()
+
+    if client_socket: 
+        client_socket.close()
 
 if __name__ == "__main__":
     run_ai_controller()

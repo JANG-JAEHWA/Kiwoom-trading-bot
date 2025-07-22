@@ -42,30 +42,36 @@ def main():
                 'volatility_of_volatility', 'momentum_acceleration', 'vp_corr_1h']
     X, y = df[features], df['target']
 
-    train_val_size = int(len(X) * 0.8)
-    X_train_val, X_test = X[:train_val_size], X[train_val_size:]
-    y_train_val, y_test = y[:train_val_size], y[train_val_size:]
+    train_size = int(len(X) * 0.7)
+    val_size = int(len(X) * 0.1)
 
-    X_train, X_val, y_train, y_val = train_test_split(X_train_val, y_train_val, train_size=0.2, random_state=42)
+   
+    X_train, y_train = X[:train_size], y[:train_size]
+    X_val, y_val = X[train_size:train_size+val_size], y[train_size:train_size+val_size]
+    X_test, y_test = X[train_size+val_size:], y[train_size+val_size:]
 
-    scale_pos_weight = (y_train == 0).sum() / (y_train == 1).sum() if (y_train == 1).sum() > 0 else 1
+    scale_pos_weight = (y == 0).sum() / (y == 1).sum() if (y == 1).sum() > 0 else 1
 
     print(f"훈련 데이터: {len(X_train)}개, 검증 데이터: {len(X_val)}개, 테스트 데이터: {len(X_test)}개")
     print(f"'BUY' 신호 가중치: {scale_pos_weight:.2f}")
 
-    storage_name = "sqlite:///universal_strategist_study.db"
-    study = optuna.create_study(storage=storage_name, study_name="universal_v1", direction='maximize', load_if_exists=True)
-    study.optimize(lambda trial: objective(trial, X_train, y_train, X_val, y_val, scale_pos_weight), n_trials=100, show_progress_bar=True)
+    safe_params ={
+        'objective': 'binary',
+        'metric': 'binary_logloss',
+        'verbosity': -1,
+        'boosting_type': 'gbdt',
+        'device': 'gpu',
+        'random_state': 42,
+        'scale_pos_weight': scale_pos_weight,
+        'n_estimators': 1000,
+        'learning_rate': 0.05,
+        'num_leaves': 31,
+        'max_depth': -1,
+        'min_child_samples': 20
+    }
 
-    print("\n--- 최적화 완료 ---")
-    print(f"최고 F1-Score: {study.best_value:.4f}")
-    print("최적 하이퍼파라미터:")
-    print(study.best_params)
-
-    print("\n최적의 하이퍼파라미터 최종 모델을 훈련합니다...")
-    final_params = study.best_params
-    final_params['scale_pos_weight'] = scale_pos_weight
-    final_model = lgb.LGBMClassifier(**final_params, device='gpu', random_state=42)
+    final_model = lgb.LGBMClassifier(**safe_params)
+    final_model.fit(pd.concat([X_train, X_val]), pd.concat([y_train, y_val]))
 
     joblib.dump(final_model, MODEL_PATH)
     print(f"\n최적화된 범용 AI 모델을 '{MODEL_PATH}'에 저장했습니다.")

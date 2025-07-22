@@ -54,7 +54,7 @@ def review_stock_performance(code, universal_model):
 
 if __name__ == "__main__":
     try:
-        universal_model_path = "C:/program trading system/models/strategist_model_v1.joblib"
+        universal_model_path = "C:/program trading system/models/universal_strategist_optimized.joblib"
         universal_model = joblib.load(universal_model_path)
         print("범용 AI 전략가 모델 로드 성공.")
     except FileNotFoundError:
@@ -67,6 +67,7 @@ if __name__ == "__main__":
             print("복기할 종목이 watchlist.txt에 없습니다.")
         else:
             for code in codes_to_review:
+                code = 234100
                 review_stock_performance(code, universal_model)
     except FileNotFoundError:
         print("오류: watchlist.txt 파일을 찾을 수 없습니다.")
