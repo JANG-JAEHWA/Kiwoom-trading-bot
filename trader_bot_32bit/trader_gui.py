@@ -1,14 +1,8 @@
-import sys
-import os
-import subprocess
-from PyQt5.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QWidget,
-                             QPushButton, QTextEdit, QLabel, QLineEdit, QHBoxLayout)
-from PyQt5.QtCore import  QThread, pyqtSignal, QTimer, QDateTime
-from kiwoom_api_trader import KiwoomAPI
-import pandas as pd
-import socket
-import csv
+import sys, os, subprocess, socket, csv, pandas as pd
 from datetime import datetime
+from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QPushButton, QTextEdit, QHBoxLayout
+from PyQt5.QtCore import QThread, pyqtSignal, QTimer, QDateTime
+from kiwoom_api_trader import KiwoomAPI
 
 class SignalServerThread(QThread):
     order_signal = pyqtSignal(str)
@@ -80,64 +74,26 @@ class MainWindow(QMainWindow):
         self.kiwoom.order_result_signal.connect(self.on_order_result)
 
     def initUI(self):
-        self.setWindowTitle('AI 자동매매 시스템 v3.0 - 최종 관제탑')
-        self.setGeometry(300, 300, 600, 500) #x, y, 너비, 높이
-
-        try:
-            with open("C:/program trading system/watchlist.txt") as f:
-                first_stock = f.readline().strip()
-            if not first_stock:
-                first_stock = "005930"
-        except FileNotFoundError:
-            first_stock = "005930"
-
+        self.setWindowTitle('AI Trader v4.0'); self.setGeometry(300, 300, 600, 400)
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-        main_vbox = QVBoxLayout()
-        central_widget.setLayout(main_vbox)
-
-        top_hbox = QHBoxLayout()
-        self.account_label = QLabel('계좌번호: 미연결')
-        self.stock_code_label = QLabel('종목코드:')
-        self.stock_code_input = QLineEdit(first_stock)
-        top_hbox.addWidget(self.account_label)
-        top_hbox.addWidget(self.stock_code_label)
-        top_hbox.addWidget(self.stock_code_input)
-
-        button_hbox = QHBoxLayout()
-        self.start_button = QPushButton('1. 키움증권 로그인')
-        self.monitor_button = QPushButton('2. 실시간 모니터링 시작')
-        self.ai_button = QPushButton('3. AI 컨트롤러 시작')
-        self.exit_button = QPushButton('프로그램 종료')
-        self.exit_button.clicked.connect(self.close)
-
-        self.monitor_button.setDisabled(True)
-        self.ai_button.setDisabled(True)
-        
-        button_hbox.addWidget(self.start_button)
-        button_hbox.addWidget(self.monitor_button)
-        button_hbox.addWidget(self.ai_button)
-        button_hbox.addWidget(self.exit_button)
-
+        layout = QVBoxLayout(central_widget)
         self.log_box = QTextEdit()
         self.log_box.setReadOnly(True)
-
-        main_vbox.addLayout(top_hbox)
-        main_vbox.addLayout(button_hbox)
-        main_vbox.addWidget(self.log_box)
-
-        self.statusBar = self.statusBar()
-        self.statusBar.showMessage("준비 중...")
-
-        self.timer = QTimer(self)
-        self.timer.start(1000)
-        self.timer.timeout.connect(self.update_time)
-
-
+        btn_layout = QHBoxLayout()
+        self.start_button, self.monitor_button, self.ai_button, self.exit_button = QPushButton('1. 로그인'), QPushButton('2. 모니터링 시작'), QPushButton('3. AI 컨트롤러 시작'), QPushButton('종료')
+        self.monitor_button.setDisabled(True)
+        self.ai_button.setDisabled(True)
+        for btn in [self.start_button, self.monitor_button, self.ai_button, self.exit_button]: btn_layout.addWidget(btn)
+        layout.addLayout(btn_layout)
+        layout.addWidget(self.log_box)
         self.start_button.clicked.connect(self.start_login)
         self.monitor_button.clicked.connect(self.start_monitoring)
         self.ai_button.clicked.connect(self.start_ai_controller)
-
+        self.exit_button.clicked.connect(self.close)
+        self.timer = QTimer(self)
+        self.timer.start(1000)
+        self.timer.timeout.connect(self.update_time)
         self.show()
     
     def start_login(self):
@@ -167,21 +123,13 @@ class MainWindow(QMainWindow):
             self.update_log(f"AI 컨트롤라 실행 실패: {e}")
             
     def update_time(self):
-        """
-        [수정] 매초마다 현재 시간과 함께, 다음 1분봉까지 남은 시간을 계산하여 상태바에 표시합니다.
-        """
         now = QDateTime.currentDateTime()
-        
-        # 상태 메시지 설정
-        status_message = f"현재시간: {now.toString('yyyy-MM-dd hh:mm:ss')}"
+        status = f"현재시간: {now.toString('yyyy-MM-dd hh:mm:ss')}"
         if not self.monitor_button.isEnabled():
-            remaining_1min = 59 - now.time().second()
-            remaining_3min_m = 2 - (now.time().minute() % 3)
-            remaining_3min_s = 59 - now.time().second()
-
-            status_message += f" | 1분봉: {remaining_1min}초 후 | 3분봉: {remaining_3min_m}분 {remaining_3min_s}초 후"
-            
-        self.statusBar.showMessage(status_message)
+            s = now.time().second()
+            m = now.time().minute()
+            status += f" | 1분봉: {59-s}초 후 | 3분봉: {2-(m%3)}분 {59-s}초 후"
+        self.statusBar().showMessage(status)
     
     def update_log(self, message):
         self.log_box.append(str(message))
@@ -193,45 +141,22 @@ class MainWindow(QMainWindow):
         self.monitor_button.setDisabled(False)
         self.ai_button.setDisabled(False)
 
-        self.account_label.setText(f"계좌번호: {self.kiwoom.account_number}")
-        self.statusBar.showMessage(f"현재시간: {QDateTime.currentDateTime().toString('yyyy-MM-dd hh:mm:ss')} | 상태: 로그인 완료")
+        self.update_log(f"로그인 성공. 계좌번호: {self.kiwoom.account_number}")
+        self.statusBar().showMessage(f"현재시간: {QDateTime.currentDateTime().toString('yyyy-MM-dd hh:mm:ss')} | 상태: 로그인 완료")
 
         self.update_log("주문 신호 감지를 시작합니다...")
         self.signal_server.start()
 
 
     def on_ai_signal_received(self, message):
+        self.update_log(f"!!! [직통 신호] {message} 수신 !!!")
         try:
-            self.update_log(f"!!! [직통 신호] {message} 수신 !!!")
-            signal, code, qty_str = message.split(',')
-            qty = int(qty_str)
-
-            trade_info = {
-                "주문유형": "매수" if "BUY" in signal else "매도",
-                "종목코드": code,
-                "체결수량": qty
-            }
-            self.log_trade(trade_info)
-            
-            if "BUY" in signal:
-                order_type = 1 # 신규매수
-            elif "SELL" in signal:
-                order_type = 2 # 신규매도
-            else:
-                self.update_log(f"알 수 없는 신호 타입: {signal}"); return
-                
-            # 주문 실행을 위한 워커 생성
-            order_kwargs = {
-                "rqname": f"AIBot_{signal}_{code}", "screen_no": "0101",
-                    "acc_no": self.kiwoom.account_number, "order_type": order_type,
-                    "code": code, "qty": qty, "price": 0, "hoga_gb": "03",
-                    "org_order_no": ""
-            }
+            signal, code, qty_str = message.split(','); qty = int(qty_str)
+            order_type = 1 if "BUY" in signal else 2
+            order_kwargs = {"rqname": f"AI_{signal}_{code}", "screen_no": "0101", "acc_no": self.kiwoom.account_number, "order_type": order_type, "code": code, "qty": qty, "price": 0, "hoga_gb": "03"}
             order_worker = KiwoomWorker(self.kiwoom, "order", **order_kwargs)
-            order_worker.start()
-            self.order_workers.append(order_worker)
-        except Exception as e:
-            self.update_log(f"신호 처리 중 오류: {e}")
+            order_worker.start(); self.order_workers.append(order_worker)
+        except Exception as e: self.update_log(f"신호 처리 오류: {e}")
         
     def on_1min_candle_completed(self, candle_data):
         self.save_candle_data(candle_data, "1min")
@@ -267,29 +192,21 @@ class MainWindow(QMainWindow):
         QApplication.instance().quit()
         event.accept()
     
-    def log_trade(self, trade_data):
-        log_path = "C:/program trading system/trade_log.csv"
-        file_exists = os.path.isfile(log_path)
-
-        with open(log_path, 'a', newline='', encoding='utf-8-sig') as f:
-            writer = csv.writer(f)
-            if not file_exists:
-                writer.writerow(['체결시간', '주문유형', '종목코드', '체결가격', '체결수량', '손익'])
-            
-            writer.writerow([
-                trade_data.get('체결시간'),
-                trade_data.get('주문유형'),
-                trade_data.get('종목코드'),
-                trade_data.get('체결가격'),
-                trade_data.get('체결수량'),
-                trade_data.get('손익', 0)
-            ])
+    def log_trade(self, data):
+        path = "C:/program trading system/trade_log.csv"
+        header = not os.path.exists(path)
+        data['체결시간'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        with open(path, 'a', newline='', encoding='utf-8-sig') as f:
+            writer = csv.DictWriter(f, fieldnames=['체결시간', '주문유형', '종목코드', '체결가격', '체결수량'])
+            if header: writer.writeheader()
+            writer.writerow({k: data.get(k, '') for k in writer.fieldnames})
+        
     
-    def on_order_result(self, result_data):
-        self.update_log(f"[주문 결과] {result_data}")
-        if result_data.get("주문상태") == "체결":
-            self.log_trade(result_data)
-            self.update_log(f"*** [거래기록] {result_data.get('종목코드')} 체결 내역을 trade_log.csv에 저장했습니다. ***")
+    def on_order_result(self, data):
+        self.update_log(f"[주문 결과] {data}")
+        if data.get("주문상태") == "체결":
+            self.log_trade(data)
+            self.update_log(f"*** [거래 기록] {data.get('종목코드')} 체결 내역 저장 완료 ***")
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)

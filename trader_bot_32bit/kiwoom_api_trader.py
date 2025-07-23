@@ -126,13 +126,25 @@ class KiwoomAPI(QObject):
         """
         if gubun == "0":
             order_status = self.api.GetChejanData(913).strip()
+
+            if order_status in ["접수", "체결"]:
+                if hasattr(self, 'order_event_loop') and self.order_event_loop.isRunning():
+                    self.order_event_loop.exit()
+            
             if order_status == "체결":
                 stock_code = self.api.GetChejanData(9001)[1:].strip()
+                order_no = self.api.GetChejanData(9203).strip()
                 order_type_raw = self.api.GetChejanData(907).strip()
                 executed_price = int(self.api.GetChejanData(910).strip())
                 executed_qty = int(self.api.GetChejanData(911).strip())
                 order_type = "매도" if order_type_raw == "+매도" else "매수"
-                self.order_result_signal.emit({"주문상태": order_status, "주문유형": order_type, "종목코드": stock_code, "체결가격": executed_price, "체결수량": executed_qty})
+                self.order_result_signal.emit({"주문상태": order_status,
+                                                "주문유형": order_type, 
+                                                "종목코드": stock_code,
+                                                "주문번호": order_no, 
+                                                "체결가격": executed_price, 
+                                                "체결수량": executed_qty
+                })
             if hasattr(self, 'order_event_loop') and self.order_event_loop.isRunning():
                 self.order_event_loop.exit()
 

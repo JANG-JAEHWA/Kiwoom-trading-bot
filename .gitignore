@@ -36,6 +36,8 @@ live_data/
 watchlist.txt
 signals/
 *.log
+*.csv
+*.json
 
 # 데이터베이스 파일
 *.db
