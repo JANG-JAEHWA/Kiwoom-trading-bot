@@ -51,7 +51,7 @@ class KiwoomAPI(QObject):
 
     def subscribe_realtime_data(self, screen_no, code_list_str):
         self.log_signal.emit(f"[{code_list_str}] 실시간 데이터 구독을 신청합니다.")
-        self.api.SetRealReg(screen_no, code_list_str, "20;10;15", "0")
+        self.api.SetRealReg(screen_no, code_list_str, "20;10;15;227;228", "0")
 
     def _receive_real_data(self, code, real_type, real_data):
         if real_type == "주식체결":
@@ -59,14 +59,16 @@ class KiwoomAPI(QObject):
                 price = abs(int(self.api.GetCommRealData(code, 10)))
                 volume = abs(int(self.api.GetCommRealData(code, 15)))
                 time_str = self.api.GetCommRealData(code, 20)
+                vi_static_price = abs(int(self.api.GetCommRealData(code, 227)))
+                vi_dynamic_price = abs(int(self.api.GetCommRealData(code, 228)))
                 now = QDateTime.currentDateTime()
                 trade_time = QDateTime.fromString(now.toString('yyyyMMdd') + time_str, 'yyyyMMddHHmmss')
-                self._update_candle(code, price, volume, trade_time, 1)
-                self._update_candle(code, price, volume, trade_time, 3)
+                self._update_candle(code, price, volume, trade_time, 1, vi_static_price, vi_dynamic_price)
+                self._update_candle(code, price, volume, trade_time, 3, vi_static_price, vi_dynamic_price)
             except Exception as e:
                 self.log_signal.emit(f"[{code}] 실시간 데이터 처리 오류: {e}")
 
-    def _update_candle(self, code, price, volume, trade_time, interval):
+    def _update_candle(self, code, price, volume, trade_time, interval, vi_static, vi_dynamic):
             candles = self.candles_1min if interval == 1 else self.candles_3min
             signal_emitter = self.candle_1min_completed_signal if interval == 1 else self.candle_3min_completed_signal
             
@@ -89,7 +91,9 @@ class KiwoomAPI(QObject):
                     'high': price,
                     'low': price,
                     'close': price,
-                    'volume': volume
+                    'volume': volume,
+                    'vi_static_price': vi_static,
+                    'vi_dynamic_price': vi_dynamic
                 }
             else:
                 candle = candle_info['data']
@@ -97,6 +101,8 @@ class KiwoomAPI(QObject):
                 candle['low'] = min(candle['low'], price)
                 candle['close'] = price
                 candle['volume'] += volume
+                candle['vi_static_price'] = vi_static
+                candle['vi_dynamic_price'] = vi_dynamic
             
 
     def send_order(self, rqname, screen_no, acc_no, order_type, code, qty, price, hoga_gb, org_order_no=""):
@@ -135,6 +141,7 @@ class KiwoomAPI(QObject):
                 stock_code = self.api.GetChejanData(9001)[1:].strip()
                 order_no = self.api.GetChejanData(9203).strip()
                 order_type_raw = self.api.GetChejanData(907).strip()
+                executed_time_str = self.api.GetChejanData(908).strip()
                 executed_price = int(self.api.GetChejanData(910).strip())
                 executed_qty = int(self.api.GetChejanData(911).strip())
                 order_type = "매도" if order_type_raw == "+매도" else "매수"
@@ -142,6 +149,7 @@ class KiwoomAPI(QObject):
                                                 "주문유형": order_type, 
                                                 "종목코드": stock_code,
                                                 "주문번호": order_no, 
+                                                "체결시간": executed_time_str,
                                                 "체결가격": executed_price, 
                                                 "체결수량": executed_qty
                 })

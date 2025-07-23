@@ -72,6 +72,8 @@ def monitor_trades(client_socket):
                 if live_df is None or live_df.empty: continue
 
                 current_price = live_df['close'].iloc[-1]
+                vi_static_price = live_df['vi_static_price'].iloc[-1]
+                vi_dynamic_price = live_df['vi_dynamic_price'].iloc[-1]
 
                 with data_lock:
                     if code in positions:
@@ -81,8 +83,16 @@ def monitor_trades(client_socket):
                         now_time_str = datetime.now().strftime('%H%M')
                         is_time_to_exit = now_time_str >= "1455"
 
+                        is_vi_approaching = False
+                        if vi_static_price > 0 and (current_price >= vi_static_price * 0.99):
+                            is_vi_approaching = True
+                        if vi_dynamic_price > 0 and (current_price >= vi_dynamic_price * 0.99):
+                            is_vi_approaching = True
+
                         if current_price >= take_profit_price or current_price <= stop_loss_price or is_time_to_exit:
-                            reason = "익절" if current_price >= take_profit_price else ("손절" if current_price <= stop_loss_price else "장마감")
+                            reason = "익절" if current_price >= take_profit_price else \
+                                     "손절" if current_price <= stop_loss_price else \
+                                     "VI임박" if is_vi_approaching else "장마감"
                             print(f"-> 청산 신호 ({reason}): [{code}] SELL")
                             send_signal("SELL", code, pos['qty'], client_socket)
                             del positions[code]
