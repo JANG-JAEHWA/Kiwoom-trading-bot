@@ -1,4 +1,4 @@
-import sys, os, subprocess, socket, csv, pandas as pd
+import sys, os, subprocess, socket, csv, pandas as pd, json, time
 from datetime import datetime
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QPushButton, QTextEdit, QHBoxLayout
 from PyQt5.QtCore import QThread, pyqtSignal, QTimer, QDateTime
@@ -34,6 +34,36 @@ class SignalServerThread(QThread):
                 s.connect(('127.0.0.1', 9999))
         except ConnectionRefusedError:
             pass
+class OrderbookStreamerThread(QThread):
+    def __init__(self):
+        super().__init__()
+        self.is_running = True
+        self.queue = []
+    def run(self):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(('127.0.0.1', 9998))
+            s.listen()
+            print("[Orderbook Server] AI 컨트롤러의 호가 데이터 접속을 기다립니다...")
+            conn, addr = s.accept()
+            with conn:
+                print(f"[Orderbook Server] AI 컨트롤러 접속: {addr}")
+                while self.is_running:
+                    if self.queue:
+                        data = self.queue.pop(0)
+                        try:
+                            conn.sendall(json.dumps(data).encode())
+                        except (BrokenPipeError, ConnectionResetError):
+                            break
+                    time.sleep(0.01)
+    def add_to_queue(self, data):
+        self.queue.append(data)
+    def stop(self): 
+        self.is_running = False
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.connect(('127.0.0.1', 9998))
+        except: pass
+            
 
 
 class KiwoomWorker(QThread):
@@ -65,6 +95,7 @@ class MainWindow(QMainWindow):
 
         self.signal_server = SignalServerThread()
         self.signal_server.order_signal.connect(self.on_ai_signal_received)
+        self.orderbook_streamer = OrderbookStreamerThread()
         self.initUI()
 
         self.kiwoom.log_signal.connect(self.update_log)
@@ -146,6 +177,10 @@ class MainWindow(QMainWindow):
 
         self.update_log("주문 신호 감지를 시작합니다...")
         self.signal_server.start()
+        self.orderbook_streamer.start()
+    
+    def on_orderbook_update(self, orderbook_data):
+        self.orderbook_streamer.add_to_queue(orderbook_data)
 
 
     def on_ai_signal_received(self, message):
@@ -195,6 +230,8 @@ class MainWindow(QMainWindow):
             self.ai_process.terminate()
         self.signal_server.stop()
         self.signal_server.wait()
+        self.orderbook_streamer.stop()
+        self.orderbook_streamer.wait()
         QApplication.instance().quit()
         event.accept()
     
