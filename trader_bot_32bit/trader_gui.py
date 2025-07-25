@@ -152,7 +152,13 @@ class MainWindow(QMainWindow):
         self.update_log(f"!!! [직통 신호] {message} 수신 !!!")
         try:
             signal, code, qty_str = message.split(','); qty = int(qty_str)
-            order_type = 1 if "BUY" in signal else 2
+            if "BUY" in signal:
+                order_type = 1 # 신규매수
+            elif "SELL" in signal:
+                order_type = 2 # 신규매도
+            else:
+                self.update_log(f"알 수 없는 신호 타입: {signal}")
+                return
             order_kwargs = {"rqname": f"AI_{signal}_{code}", "screen_no": "0101", "acc_no": self.kiwoom.account_number, "order_type": order_type, "code": code, "qty": qty, "price": 0, "hoga_gb": "03"}
             order_worker = KiwoomWorker(self.kiwoom, "order", **order_kwargs)
             order_worker.start(); self.order_workers.append(order_worker)

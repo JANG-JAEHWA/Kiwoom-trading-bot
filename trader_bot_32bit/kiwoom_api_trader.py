@@ -56,11 +56,21 @@ class KiwoomAPI(QObject):
     def _receive_real_data(self, code, real_type, real_data):
         if real_type == "주식체결":
             try:
-                price = abs(int(self.api.GetCommRealData(code, 10)))
-                volume = abs(int(self.api.GetCommRealData(code, 15)))
+                price_str = self.api.GetCommRealData(code, 10)
+                volume_str = self.api.GetCommRealData(code, 15)
                 time_str = self.api.GetCommRealData(code, 20)
-                vi_static_price = abs(int(self.api.GetCommRealData(code, 227)))
-                vi_dynamic_price = abs(int(self.api.GetCommRealData(code, 228)))
+                vi_static_str = self.api.GetCommRealData(code, 227)
+                vi_dynamic_str = self.api.GetCommRealData(code, 228)
+
+    
+                if not all([price_str, volume_str, time_str]):
+                    return
+
+                price = abs(int(float(price_str)))
+                volume = abs(int(float(volume_str)))
+                vi_static_price = abs(int(float(vi_static_str))) if vi_static_str else 0
+                vi_dynamic_price = abs(int(float(vi_dynamic_str))) if vi_dynamic_str else 0
+
                 now = QDateTime.currentDateTime()
                 trade_time = QDateTime.fromString(now.toString('yyyyMMdd') + time_str, 'yyyyMMddHHmmss')
                 self._update_candle(code, price, volume, trade_time, 1, vi_static_price, vi_dynamic_price)
@@ -140,11 +150,11 @@ class KiwoomAPI(QObject):
             if order_status == "체결":
                 stock_code = self.api.GetChejanData(9001)[1:].strip()
                 order_no = self.api.GetChejanData(9203).strip()
-                order_type_raw = self.api.GetChejanData(907).strip()
+                order_gubun = self.api.GetChejanData(905).strip()
+                order_type = "매도" if "매도" in order_gubun else "매수"
                 executed_time_str = self.api.GetChejanData(908).strip()
                 executed_price = int(self.api.GetChejanData(910).strip())
                 executed_qty = int(self.api.GetChejanData(911).strip())
-                order_type = "매도" if order_type_raw == "+매도" else "매수"
                 self.order_result_signal.emit({"주문상태": order_status,
                                                 "주문유형": order_type, 
                                                 "종목코드": stock_code,
