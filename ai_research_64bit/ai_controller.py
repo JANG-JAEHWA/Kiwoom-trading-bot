@@ -34,18 +34,17 @@ class OrderbookClientThread(Thread):
                     s.connect(('127.0.0.1', 9998))
                     print("[Orderbook Client] GUI 호가 서버 접속 성공.")
                     while self.is_running:
-                        data = s.recv(4096)
+                        data = s.recv(4096).decode('utf-8')
                         if not data: break
                         buffer += data
-                        while '}' in buffer:
-                            end_index = buffer.find('}') + 1
+                        while '\n' in buffer:
+                            line, buffer = buffer.split('\n', 1)
                             try:
-                                orderbook = json.loads(buffer[:end_index])
+                                orderbook = json.loads(line)
                                 with data_lock:
                                     latest_orderbook[orderbook['code']] = orderbook
-                                buffer = buffer[end_index:]
                             except json.JSONDecodeError:
-                                break
+                                continue
             except Exception as e:
                 print(f"[Orderbook Client] 연결 오류: {e}. 5초 후 재시도.")
                 time.sleep(5)
@@ -124,6 +123,7 @@ def monitor_for_execution(client_socket):
                 orderbook = latest_orderbook.get(code)
                 if not orderbook: continue
                 current_price = orderbook['buy_price_1']
+                if current_price == 0: continue
                 
                 with data_lock:
                     state_info = stock_states.get(code, {})

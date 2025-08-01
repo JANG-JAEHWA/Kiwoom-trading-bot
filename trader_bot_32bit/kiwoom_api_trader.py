@@ -1,4 +1,4 @@
-from PyQt5.QtCore import QEventLoop, QDateTime, QObject, pyqtSignal, QTimer
+from PyQt5.QtCore import QEventLoop, QDateTime, QObject, pyqtSignal
 from PyQt5.QAxContainer import QAxWidget
 import datetime
 
@@ -52,7 +52,7 @@ class KiwoomAPI(QObject):
         self.login_event_loop.exit()
 
     def subscribe_realtime_data(self, screen_no, code_list_str):
-        fids = "20;10;15;41;42;43;44;45;46;47;48;49;50;51;52;53;54;55;56;57;58;59;60;125;129;227;228"
+        fids = "20;10;15;227;228;41;42;43;44;45;46;47;48;49;50;51;52;53;54;55;56;57;58;59;60;61;71;125;129"
         self.log_signal.emit(f"[{code_list_str}] 실시간 데이터 구독을 신청합니다.")
         self.api.SetRealReg(screen_no, code_list_str,fids, "1")
 
@@ -80,18 +80,18 @@ class KiwoomAPI(QObject):
                 self._update_candle(code, price, volume, trade_time, 3, vi_static_price, vi_dynamic_price)
             except Exception as e:
                 self.log_signal.emit(f"[{code}] 실시간 데이터 처리 오류: {e}")
-        elif real_data == "주식호가잔량":
+        elif real_type == "주식호가잔량":
             try:
                 orderbook = {'code': code}
                 for i in range(10):
-                    orderbook[f'sell_price_{i+1}'] = abs(int(self.api.GetCommRealData(code, 41 + i)))
-                    orderbook[f'sell_qty_{i+1}'] = abs(int(self.api.GetCommRealData(code, 61 + i)))
+                    orderbook[f'sell_price_{i+1}'] = abs(int(float(self.api.GetCommRealData(code, 41 + i))))
+                    orderbook[f'sell_qty_{i+1}'] = abs(int(float(self.api.GetCommRealData(code, 61 + i))))
 
-                    orderbook[f'buy_price_{i+1}'] = abs(int(self.api.GetCommRealData(code, 51 + i)))
-                    orderbook[f'buy_qty_{i+1}'] = abs(int(self.api.GetCommRealData(code, 71 + i)))
+                    orderbook[f'buy_price_{i+1}'] = abs(int(float(self.api.GetCommRealData(code, 51 + i))))
+                    orderbook[f'buy_qty_{i+1}'] = abs(int(float(self.api.GetCommRealData(code, 71 + i))))
 
-                orderbook[f'total_sell_qty'] = abs(int(self.api.GetCommRealData(code, 125)))
-                orderbook[f'total_buy_qty'] = abs(int(self.api.GetCommRealData(code, 129)))
+                orderbook[f'total_sell_qty'] = abs(int(float(self.api.GetCommRealData(code, 125))))
+                orderbook[f'total_buy_qty'] = abs(int(float(self.api.GetCommRealData(code, 129))))
 
                 self.orderbook_update_signal.emit(orderbook)
             except Exception as e:
