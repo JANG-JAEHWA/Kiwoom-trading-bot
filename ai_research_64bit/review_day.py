@@ -70,7 +70,7 @@ if __name__ == "__main__":
             print("복기할 종목이 watchlist.txt에 없습니다.")
         else:
             for code in codes_to_review:
-                code = 234100
+                #code = 234100
                 review_stock_performance(code, universal_model)
     except FileNotFoundError:
         print("오류: watchlist.txt 파일을 찾을 수 없습니다.")

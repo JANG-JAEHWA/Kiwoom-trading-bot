@@ -46,7 +46,6 @@ class KiwoomAPICollector(QObject):
                     data_list.append(item)
                 except (ValueError, TypeError):
                     continue
-                data_list.append(item)
             self.tr_data = data_list
         if self.tr_event_loop and self.tr_event_loop.isRunning():
             self.tr_event_loop.exit()

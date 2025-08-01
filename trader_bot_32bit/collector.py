@@ -64,7 +64,6 @@ class Collector:
                 print(f"-> '{state}' 상태이므로 수집에서 제외합니다.")
                 continue
             if not self.is_file_new:
-                print(f"-> 기존 파일 발견. 최신 데이터로 업데이트합니다...")
                 print("-> 파일이 이미 존재하므로 건너 뜁니다.")
                 continue
 

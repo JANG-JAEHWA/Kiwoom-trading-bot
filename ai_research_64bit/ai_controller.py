@@ -30,6 +30,7 @@ class OrderbookClientThread(Thread):
         self.is_running = True
     
     def run(self):
+        buffer = ""
         while self.is_running:
             try:
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -67,7 +68,7 @@ def get_micro_price(orderbook):
         if bid_price * bid_qty * ask_price * ask_qty == 0: continue
 
         total_bid_value += bid_price * bid_qty
-        total_ask_qty += bid_qty
+        total_bid_qty += bid_qty
         total_ask_value += ask_price * ask_qty
         total_ask_qty += ask_qty
     
