@@ -181,11 +181,16 @@ def monitor_for_execution(client_socket):
                 with data_lock:
                     state_info = stock_states.get(code, {})
                     status = state_info.get('status')
-                    if status == 'IN_POSITION':
+                    if status == 'IN_POSITION': # 손절 매매 로직
                         pos = positions.get(code)
                         if not pos: continue
                         take_profit_price = pos['entry_price'] * 1.015
-                        stop_loss_price = pos['entry_price'] * 0.99
+                        fixed_stop_loss_price = pos['entry_price'] * 0.99
+
+                        trailing_stop_loss_price = pos['highest_price'] * 0.98
+
+                        effective_stop_loss_price = max(fixed_stop_loss_price, trailing_stop_loss_price)
+
                         now_time_str = datetime.now().strftime('%H%M')
                         is_time_to_exit = now_time_str >= "1455"
 
@@ -198,11 +203,14 @@ def monitor_for_execution(client_socket):
                             if vi_static_price > 0 and (current_price >= vi_static_price * 0.99): is_vi_approaching = True
                             if vi_dynamic_price > 0 and (current_price >= vi_dynamic_price * 0.99): is_vi_approaching = True
                         
-                        if current_price >= take_profit_price or current_price <= stop_loss_price or is_time_to_exit or is_vi_approaching:
-                            reason = "익절" if current_price >= take_profit_price else ("손절" if current_price <= stop_loss_price else ("VI임박" if is_vi_approaching else "장마감"))
-                            print(f"-> 청산 신호 ({reason}): [{code}] SELL")
+                        if current_price >= take_profit_price or current_price <= effective_stop_loss_price or is_time_to_exit or is_vi_approaching:
+                            reason = "익절" if current_price >= take_profit_price else \
+                                    ("추적손절" if current_price <= trailing_stop_loss_price else \
+                                     ("손절" if current_price <= fixed_stop_loss_price else \
+                                      ("VI임박" if is_vi_approaching else "장마감")))
+                            print(f"-> 청산 신호 ({reason}): [{code}] SELL(현재가: {current_price}, 최고가: {pos['highest_price']}, 손절라인: {effective_stop_loss_price})")
                             send_signal("SELL", code, pos['qty'], client_socket); del positions[code]; state_info['status'] = 'WATCHING'
-                    elif status == 'ENTRY_WINDOW_OPEN':
+                    elif status == 'ENTRY_WINDOW_OPEN': # 매수 로직
                         if time.time() > state_info.get('window_expires_at', 0):
                             print(f"[{code}] 공격 시간 초과. 정찰 모드로 복귀.")
                             state_info['status'] = 'WATCHING'; continue
@@ -227,7 +235,7 @@ def monitor_for_execution(client_socket):
                             if buy_qty > 0:
                                 send_signal("BUY", code, buy_qty, client_socket)
                                 state_info['status'] = 'IN_POSITION'
-                                positions[code] = {'qty': buy_qty, 'entry_price': current_price}
+                                positions[code] = {'qty': buy_qty, 'entry_price': current_price, 'highest_price': current_price}
             time.sleep(0.5)
         except Exception as e: print(f"\n실행/청산 감시 오류: {e}"); time.sleep(1)
 
