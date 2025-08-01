@@ -15,6 +15,14 @@ def generate_features(df):
 
     df_new['volume_weighted_momentum'] = df_new['momentum_2h'] * df_new['volume']
 
+    df_new['ma_5'] = df_new['close'].rolling(window=5).mean()
+    df_new['ma_20'] = df_new['close'].rolling(window=20).mean()
+    df_new['ma_60'] = df_new['close'].rolling(window=60).mean()
+
+    df_new['is_strong_trend'] = np.where(
+        (df_new['ma_5'] > df_new['ma_20']) & (df_new['ma_20'] > df_new['ma_60']), 1, 0
+    )
+
     df_new = df_new.drop(columns=['price_change'])
     
     return df_new.dropna()

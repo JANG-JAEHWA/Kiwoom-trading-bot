@@ -51,7 +51,7 @@ class OrderbookStreamerThread(QThread):
                     if self.queue:
                         data = self.queue.pop(0)
                         try:
-                            conn.sendall(json.dumps(data).encode())
+                            conn.sendall((json.dumps(data) + '\n').encode())
                         except (BrokenPipeError, ConnectionResetError):
                             break
                     time.sleep(0.01)
